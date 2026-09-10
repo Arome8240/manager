@@ -18,17 +18,21 @@ import com.example.arcarcustomizer.customization.DefaultCarPaints
 import com.example.arcarcustomizer.customization.DefaultWheelStyles
 import io.github.sceneview.SceneView
 import io.github.sceneview.SurfaceType
+import io.github.sceneview.createEnvironment
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Size
 import io.github.sceneview.node.ContactShadowContext
 import io.github.sceneview.node.Node as NodeImpl
 import io.github.sceneview.rememberEngine
+import io.github.sceneview.rememberEnvironment
+import io.github.sceneview.rememberEnvironmentLoader
 import io.github.sceneview.rememberModelInstance
 import io.github.sceneview.rememberModelLoader
 
 /**
  * Fallback mode (tasks.md Phase 4): the same car rendered in a non-AR SceneView over a live
- * CameraX preview, rotated by the device's gyroscope, with a soft contact shadow.
+ * CameraX preview, rotated by the device's gyroscope, with a soft contact shadow and HDR-based
+ * indirect lighting (there's no ARCore light estimation to fall back on here).
  *
  * Reuses [CustomizableCar] — the identical shared module AR mode uses — so paint and wheel
  * swap behave the same way in both modes.
@@ -41,55 +45,68 @@ fun FallbackScreen() {
 
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
+    val environmentLoader = rememberEnvironmentLoader(engine)
     val carModel = rememberModelInstance(modelLoader, CarModelConfig.CAR_ASSET_PATH)
 
     RegisterDeviceRotationListener { rotation -> rigNode?.rotation = rotation }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        CameraPreview(modifier = Modifier.fillMaxSize())
+    CameraPermissionGate {
+        Box(modifier = Modifier.fillMaxSize()) {
+            CameraPreview(modifier = Modifier.fillMaxSize())
 
-        // TextureSurface + isOpaque = false so this layer composites over the camera preview
-        // beneath it instead of covering it.
-        SceneView(
-            modifier = Modifier.fillMaxSize(),
-            engine = engine,
-            modelLoader = modelLoader,
-            surfaceType = SurfaceType.TextureSurface,
-            isOpaque = false,
-        ) {
-            carModel?.let { model ->
-                // Placeholder placement in front of the default camera — retune once the real
-                // car .glb's actual size is known.
-                Node(
-                    position = Position(y = -0.3f, z = -1.5f),
-                    apply = { rigNode = this },
-                ) {
-                    CustomizableCar(
-                        carModel = model,
-                        wheelModelLoader = modelLoader,
-                        paint = paint,
-                        wheelStyle = wheelStyle,
-                    )
+            // TextureSurface + isOpaque = false so this layer composites over the camera
+            // preview beneath it instead of covering it.
+            SceneView(
+                modifier = Modifier.fillMaxSize(),
+                engine = engine,
+                modelLoader = modelLoader,
+                surfaceType = SurfaceType.TextureSurface,
+                isOpaque = false,
+                environment = rememberEnvironment(environmentLoader, isOpaque = false) {
+                    // createSkybox = false: only the HDR's indirect lighting is wanted here —
+                    // its skybox would otherwise paint over the live camera feed behind it.
+                    // No HDR asset yet -> createHDREnvironment returns null and this falls
+                    // back to a neutral default environment.
+                    environmentLoader.createHDREnvironment(
+                        CarModelConfig.HDR_ASSET_PATH,
+                        createSkybox = false,
+                    ) ?: createEnvironment(environmentLoader, false)
+                },
+            ) {
+                carModel?.let { model ->
+                    // Placeholder placement in front of the default camera — retune once the
+                    // real car .glb's actual size is known.
+                    Node(
+                        position = Position(y = -0.3f, z = -1.5f),
+                        apply = { rigNode = this },
+                    ) {
+                        CustomizableCar(
+                            carModel = model,
+                            wheelModelLoader = modelLoader,
+                            paint = paint,
+                            wheelStyle = wheelStyle,
+                        )
+                    }
                 }
+
+                ContactShadow(
+                    size = Size(1.2f, 1.2f, 0f),
+                    context = ContactShadowContext.Floor,
+                    position = Position(y = -0.8f, z = -1.5f),
+                )
             }
 
-            ContactShadow(
-                size = Size(1.2f, 1.2f, 0f),
-                context = ContactShadowContext.Floor,
-                position = Position(y = -0.8f, z = -1.5f),
+            CustomizationControls(
+                paints = DefaultCarPaints,
+                selectedPaint = paint,
+                onPaintSelected = { paint = it },
+                wheelStyles = DefaultWheelStyles,
+                selectedWheelStyle = wheelStyle,
+                onWheelStyleSelected = { wheelStyle = it },
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(16.dp),
             )
         }
-
-        CustomizationControls(
-            paints = DefaultCarPaints,
-            selectedPaint = paint,
-            onPaintSelected = { paint = it },
-            wheelStyles = DefaultWheelStyles,
-            selectedWheelStyle = wheelStyle,
-            onWheelStyleSelected = { wheelStyle = it },
-            modifier = Modifier
-                .align(Alignment.BottomCenter)
-                .padding(16.dp),
-        )
     }
 }

@@ -31,6 +31,13 @@ object CarModelConfig {
 
     /** The body mesh's material name, as authored in the .glb (check it in Blender/your DCC tool). */
     const val BODY_MATERIAL_NAME = "body"
+
+    /**
+     * HDR environment map for Fallback mode's indirect lighting (Phase 4). Until this asset
+     * exists, [io.github.sceneview.loaders.EnvironmentLoader.createHDREnvironment] simply
+     * returns `null` and callers fall back to a neutral default environment.
+     */
+    const val HDR_ASSET_PATH = "environments/studio.hdr"
 }
 
 /** A selectable paint color, applied to the body material's baseColorFactor. */
