@@ -94,10 +94,12 @@ fun FallbackScreen() {
                     }
                 }
 
+                // Resized to match the now-small (FALLBACK_SCALE'd) car footprint — this is a
+                // separate, unscaled node, so it doesn't inherit the rig's scale automatically.
                 ContactShadow(
-                    size = Size(1.2f, 1.2f, 0f),
+                    size = Size(0.4f, 0.4f, 0f),
                     context = ContactShadowContext.Floor,
-                    position = Position(y = -0.8f, z = -1.5f),
+                    position = Position(y = -0.34f, z = -1.5f),
                 )
             }
 
