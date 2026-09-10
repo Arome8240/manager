@@ -3,11 +3,14 @@ package com.example.arcarcustomizer.customization
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
@@ -20,69 +23,149 @@ import androidx.compose.ui.unit.dp
 import io.github.sceneview.SceneScope
 import io.github.sceneview.loaders.ModelLoader
 import io.github.sceneview.math.Position
+import io.github.sceneview.math.Scale
 import io.github.sceneview.model.ModelInstance
 import io.github.sceneview.rememberModelInstance
 
 /**
- * Everything about the car model itself that depends on the [asset] the user supplies.
- * Update these if `car.glb` is ever replaced with a different model.
+ * One selectable part model for a [PartSlot] (a specific tire, rim, steering wheel, headlight,
+ * etc.).
  */
-object CarModelConfig {
-    const val CAR_ASSET_PATH = "models/car.glb"
+data class PartOption(val label: String, val assetPath: String)
 
-    /**
-     * The body-paint material, as authored in car.glb. Measured directly from the asset's glTF
-     * JSON: the model has TWO chassis-ish materials — "chasis" turned out to be a small
-     * textured trim primitive, while "chasis_NONE" (untextured, so baseColorFactor fully
-     * controls its color) is the one covering the whole car shell. Re-measure if the car .glb
-     * is ever replaced.
-     */
-    const val BODY_MATERIAL_NAME = "chasis_NONE"
+/**
+ * A customizable slot on a car — e.g. "wheels" (4 positions) or "steering wheel" (1 position).
+ * [positions] and [targetSizeNative] are in the owning [CarModel]'s own native asset units (see
+ * [CarModel.nativeToMeters]) — measured directly from that car's glTF geometry, not real meters.
+ */
+data class PartSlot(
+    val id: String,
+    val label: String,
+    val positions: List<Position>,
+    val targetSizeNative: Float,
+    val options: List<PartOption>,
+)
 
-    /**
-     * car.glb's own wheel meshes (node names, one per wheel) — kept only as wheel-well
-     * placeholders. [CustomizableCar] always hides them: a [WheelStyle] model is rendered at
-     * each of [WheelWellPositions] instead, so a wheel swap actually replaces what's visible.
-     */
-    val NativeWheelNodeNames = setOf("Circle", "Circle.001", "Circle.002", "Circle.003")
+/**
+ * One selectable car body, with everything about it that's specific to its own .glb: which
+ * material is the paintable body, which of its own meshes are placeholder parts to always hide
+ * (replaced by the matching [PartSlot] instead), the scale needed to bring its native units to
+ * metres, and its customizable slots.
+ *
+ * Adding a new car means measuring these same facts from its own glTF JSON (see how
+ * `car_nissan_gtr.glb` and `car_lamborghini.glb` were measured) — there's no auto-detection.
+ */
+data class CarModel(
+    val id: String,
+    val label: String,
+    val assetPath: String,
+    val bodyMaterialName: String,
+    val hiddenNativeNodeNames: Set<String>,
+    val nativeToMeters: Float,
+    val slots: List<PartSlot>,
+)
 
-    /**
-     * The four wheel-well centers, measured from car.glb's own native wheel meshes' bounding
-     * boxes (front-right, front-left, rear-left, rear-right). Re-measure if car.glb changes.
-     */
-    val WheelWellPositions = listOf(
-        Position(x = 1.02f, y = -0.37f, z = -1.64f), // front-right
-        Position(x = -1.04f, y = -0.37f, z = -1.64f), // front-left
-        Position(x = -1.04f, y = -0.37f, z = 1.94f), // rear-left
-        Position(x = 1.02f, y = -0.37f, z = 1.94f), // rear-right
-    )
+/**
+ * The wheel-ish downloads sourced so far. None of them cleanly separate a tire from its rim, so
+ * they're offered together as one "Wheels" slot rather than split into separate Tires/Rims
+ * slots that would only have one real option each. Add a new [PartSlot] (e.g. "headlights") the
+ * same way once a matching asset exists — nothing else about this system is wheel-specific.
+ */
+private val WheelOptions = listOf(
+    PartOption("Hubcap", "models/wheels_hubcap.glb"),
+    PartOption("Tire", "models/wheels_tire.glb"),
+    PartOption("Vehicle Tire", "models/wheels_vehicle_tire.glb"),
+)
 
-    /** Target wheel diameter (metres) each [WheelStyle] model is normalized to via `scaleToUnits`. */
-    const val WHEEL_DIAMETER_METERS = 0.92f
+private val SteeringWheelOptions = listOf(
+    PartOption("Steering Wheel", "models/wheels_steering_wheel.glb"),
+)
 
-    /**
-     * car.glb's own chassis (the "chasis_NONE" primitive) is ~6.17 units long as authored —
-     * true life-size for AR mode (walk around a real-size car in your driveway), but far too
-     * large for Fallback mode, which shows the car floating close in front of the camera like a
-     * small display model. This uniformly scales the WHOLE composite (body + wheel-well
-     * positions together, via the shared rig node) down to roughly a 0.6 m long toy replica.
-     * Re-measure/tune if car.glb changes or this doesn't look right on-device.
-     */
-    const val FALLBACK_SCALE = 0.1f
+/**
+ * Measured directly from car_nissan_gtr.glb's glTF JSON: `chasis_NONE` is the untextured
+ * material spanning the whole shell (see the original measurement notes this replaced), the
+ * four wheels are separate nodes named "Circle"/"Circle.001-3", and the model's own units are
+ * already ~metres (its ~6.17 m chassis length is life-size once the big rear wing is included).
+ */
+private val NissanGtr = CarModel(
+    id = "nissan_gtr",
+    label = "Nissan GT-R",
+    assetPath = "models/car_nissan_gtr.glb",
+    bodyMaterialName = "chasis_NONE",
+    hiddenNativeNodeNames = setOf("Circle", "Circle.001", "Circle.002", "Circle.003"),
+    nativeToMeters = 1f,
+    slots = listOf(
+        PartSlot(
+            id = "wheels",
+            label = "Wheels",
+            positions = listOf(
+                Position(x = 1.02f, y = -0.37f, z = -1.64f), // front-right
+                Position(x = -1.04f, y = -0.37f, z = -1.64f), // front-left
+                Position(x = -1.04f, y = -0.37f, z = 1.94f), // rear-left
+                Position(x = 1.02f, y = -0.37f, z = 1.94f), // rear-right
+            ),
+            targetSizeNative = 0.92f,
+            options = WheelOptions,
+        ),
+        PartSlot(
+            id = "steeringWheel",
+            label = "Steering Wheel",
+            // Estimated cabin position — car_nissan_gtr.glb has no dashboard reference point to
+            // measure, so this needs visual tuning on-device once you can see it.
+            positions = listOf(Position(x = -0.35f, y = 0.15f, z = -0.9f)),
+            targetSizeNative = 0.4f,
+            options = SteeringWheelOptions,
+        ),
+    ),
+)
 
-    /**
-     * HDR environment map for Fallback mode's indirect lighting (Phase 4). Until this asset
-     * exists, [io.github.sceneview.loaders.EnvironmentLoader.createHDREnvironment] simply
-     * returns `null` and callers fall back to a neutral default environment.
-     */
-    const val HDR_ASSET_PATH = "environments/studio.hdr"
-}
+/**
+ * Measured directly from car_lamborghini.glb's glTF JSON: body + wheels share one material
+ * (`_Lamborghini_AventadorLamborghini_Aventador_BodySG`), the four wheels are separate nodes
+ * named "Lamborghini_Aventador_Wheel_FL/FR/RL/RR", and the model's own units are centimetres —
+ * confirmed by its ~489 cm (4.89 m) chassis length and ~70 cm wheel diameter both matching a
+ * real Aventador.
+ */
+private val LamborghiniAventador = CarModel(
+    id = "lamborghini_aventador",
+    label = "Lamborghini Aventador",
+    assetPath = "models/car_lamborghini.glb",
+    bodyMaterialName = "_Lamborghini_AventadorLamborghini_Aventador_BodySG",
+    hiddenNativeNodeNames = setOf(
+        "Lamborghini_Aventador_Wheel_FL",
+        "Lamborghini_Aventador_Wheel_FR",
+        "Lamborghini_Aventador_Wheel_RL",
+        "Lamborghini_Aventador_Wheel_RR",
+    ),
+    nativeToMeters = 0.01f,
+    slots = listOf(
+        PartSlot(
+            id = "wheels",
+            label = "Wheels",
+            positions = listOf(
+                Position(x = 65.89f, y = 34.6f, z = 99.44f), // front-right
+                Position(x = -104.97f, y = 34.6f, z = 99.44f), // front-left
+                Position(x = 65.89f, y = 36.42f, z = -175.47f), // rear-right
+                Position(x = -104.97f, y = 36.42f, z = -175.47f), // rear-left
+            ),
+            targetSizeNative = 70f,
+            options = WheelOptions,
+        ),
+        PartSlot(
+            id = "steeringWheel",
+            label = "Steering Wheel",
+            // Estimated cabin position, same caveat as the Nissan's — needs visual tuning.
+            positions = listOf(Position(x = -20f, y = 75f, z = 45f)),
+            targetSizeNative = 35f,
+            options = SteeringWheelOptions,
+        ),
+    ),
+)
 
-/** A selectable paint color, applied to the body material's baseColorFactor. */
+val CarCatalog = listOf(NissanGtr, LamborghiniAventador)
+
+/** A selectable paint color, applied to the body material's baseColorFactor. Car-independent. */
 data class CarPaint(val label: String, val color: Color)
-
-/** A selectable wheel style, rendered once per [CarModelConfig.WheelWellPositions] entry. */
-data class WheelStyle(val label: String, val assetPath: String)
 
 val DefaultCarPaints = listOf(
     CarPaint("Red", Color(0xFFC62828)),
@@ -91,20 +174,9 @@ val DefaultCarPaints = listOf(
     CarPaint("White", Color(0xFFFAFAFA)),
 )
 
-// The four sourced wheel-adjacent models are wildly different native scales (millimeters,
-// arbitrary CAD units, near-correct meters) — `scaleToUnits` in CustomizableCar normalizes
-// each to CarModelConfig.WHEEL_DIAMETER_METERS regardless.
-val DefaultWheelStyles = listOf(
-    WheelStyle("Hubcap", "models/wheels_hubcap.glb"),
-    WheelStyle("Tire", "models/wheels_tire.glb"),
-    WheelStyle("Vehicle Tire", "models/wheels_vehicle_tire.glb"),
-    WheelStyle("Steering Wheel", "models/wheels_steering_wheel.glb"),
-)
-
 /**
  * Sets the body material's `baseColorFactor` to [color]. [bodyMaterialName] must match the
- * material name authored on the car .glb's body mesh — this is the one place a real car asset
- * requires a matching config value (see [CarModelConfig.BODY_MATERIAL_NAME]).
+ * material name authored on the car .glb's body mesh (see [CarModel.bodyMaterialName]).
  */
 fun ModelInstance.applyPaint(bodyMaterialName: String, color: Color) {
     materialInstances
@@ -116,62 +188,76 @@ fun ModelInstance.applyPaint(bodyMaterialName: String, color: Color) {
 }
 
 /**
- * Renders the car body plus its currently-selected wheel set. This is the shared module: it is a
- * plain [SceneScope] extension with no AR-specific or CameraX-specific dependency, so the exact
- * same call works inside both [io.github.sceneview.SceneView] (Fallback mode) and
- * [io.github.sceneview.ar.ARSceneView] (AR mode, whose `ARSceneScope` extends `SceneScope`).
+ * Renders [car]'s body plus whatever [PartOption] is selected for each of its [PartSlot]s. This
+ * is the shared module: it is a plain [SceneScope] extension with no AR-specific or
+ * CameraX-specific dependency, so the exact same call works inside both
+ * [io.github.sceneview.SceneView] (Fallback mode) and [io.github.sceneview.ar.ARSceneView] (AR
+ * mode, whose `ARSceneScope` extends `SceneScope`).
  *
- * Swapping [wheelStyle] is a plain state change: [rememberModelInstance] is keyed on its asset
- * path, so Compose disposes the old wheel model and loads the new one — no manual node surgery.
+ * Everything inside is expressed in [car]'s own native units and wrapped in one
+ * `Node(scale = car.nativeToMeters)`, so from the outside (an AR anchor, a Fallback rig) every
+ * car — regardless of what units it was authored in — presents as a consistent, real-world-metre
+ * object. Swapping [car] or any [selectedOptions] entry is a plain state change: each part is
+ * loaded via [rememberModelInstance], keyed on its own asset path, so Compose disposes the old
+ * model and loads the new one — no manual node surgery.
  */
 @Composable
 fun SceneScope.CustomizableCar(
-    carModel: ModelInstance,
-    wheelModelLoader: ModelLoader,
+    car: CarModel,
+    partModelLoader: ModelLoader,
     paint: CarPaint,
-    wheelStyle: WheelStyle,
-    bodyMaterialName: String = CarModelConfig.BODY_MATERIAL_NAME,
+    selectedOptions: Map<String, PartOption>,
 ) {
-    LaunchedEffect(carModel, paint, bodyMaterialName) {
-        carModel.applyPaint(bodyMaterialName, paint.color)
-    }
-
-    ModelNode(
-        modelInstance = carModel,
-        apply = {
-            // car.glb's own wheel meshes only mark the wheel-well positions — always hidden in
-            // favor of the WheelStyle instances below, which are what a wheel swap changes.
-            renderableNodes
-                .filter { it.name in CarModelConfig.NativeWheelNodeNames }
-                .forEach { it.isVisible = false }
-        },
-    )
-
-    CarModelConfig.WheelWellPositions.forEach { wellPosition ->
-        val wheelInstance = rememberModelInstance(wheelModelLoader, wheelStyle.assetPath)
-        wheelInstance?.let {
+    Node(scale = Scale(car.nativeToMeters)) {
+        val carModel = rememberModelInstance(partModelLoader, car.assetPath)
+        carModel?.let { model ->
+            LaunchedEffect(model, paint, car) {
+                model.applyPaint(car.bodyMaterialName, paint.color)
+            }
             ModelNode(
-                modelInstance = it,
-                position = wellPosition,
-                centerOrigin = Position(x = 0f, y = 0f, z = 0f),
-                scaleToUnits = CarModelConfig.WHEEL_DIAMETER_METERS,
+                modelInstance = model,
+                apply = {
+                    // The car's own part meshes only mark where each slot's positions came
+                    // from — always hidden in favor of the selected PartOption instances below.
+                    renderableNodes
+                        .filter { it.name in car.hiddenNativeNodeNames }
+                        .forEach { it.isVisible = false }
+                },
             )
+        }
+
+        car.slots.forEach { slot ->
+            val option = selectedOptions[slot.id] ?: slot.options.first()
+            slot.positions.forEach { position ->
+                val partInstance = rememberModelInstance(partModelLoader, option.assetPath)
+                partInstance?.let {
+                    ModelNode(
+                        modelInstance = it,
+                        position = position,
+                        centerOrigin = Position(x = 0f, y = 0f, z = 0f),
+                        scaleToUnits = slot.targetSizeNative,
+                    )
+                }
+            }
         }
     }
 }
 
 /**
- * Paint-swatch + wheel-style pickers, shared by both modes. A plain Compose overlay: it draws
- * over whatever 3D content is behind it, AR or Fallback alike.
+ * Car picker, paint swatches, and one row per the selected car's [PartSlot]s — shared by both
+ * modes. A plain Compose overlay: it draws over whatever 3D content is behind it, AR or
+ * Fallback alike.
  */
 @Composable
 fun CustomizationControls(
+    cars: List<CarModel>,
+    selectedCar: CarModel,
+    onCarSelected: (CarModel) -> Unit,
     paints: List<CarPaint>,
     selectedPaint: CarPaint,
     onPaintSelected: (CarPaint) -> Unit,
-    wheelStyles: List<WheelStyle>,
-    selectedWheelStyle: WheelStyle,
-    onWheelStyleSelected: (WheelStyle) -> Unit,
+    selectedOptions: Map<String, PartOption>,
+    onOptionSelected: (slotId: String, option: PartOption) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -180,10 +266,17 @@ fun CustomizationControls(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+        LabeledChipRow(
+            options = cars,
+            optionLabel = { it.label },
+            isSelected = { it.id == selectedCar.id },
+            onSelected = onCarSelected,
+        )
+
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             paints.forEach { paint ->
                 val selected = paint == selectedPaint
-                androidx.compose.foundation.layout.Box(
+                Box(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(CircleShape)
@@ -197,19 +290,43 @@ fun CustomizationControls(
                 )
             }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            wheelStyles.forEach { style ->
-                val selected = style == selectedWheelStyle
-                Text(
-                    text = style.label,
-                    color = Color.White,
-                    modifier = Modifier
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(if (selected) Color.White.copy(alpha = 0.25f) else Color.Transparent)
-                        .clickable { onWheelStyleSelected(style) }
-                        .padding(horizontal = 10.dp, vertical = 6.dp)
+
+        selectedCar.slots.forEach { slot ->
+            Column {
+                Text(slot.label, color = Color.White.copy(alpha = 0.7f))
+                LabeledChipRow(
+                    options = slot.options,
+                    optionLabel = { it.label },
+                    isSelected = { (selectedOptions[slot.id] ?: slot.options.first()) == it },
+                    onSelected = { onOptionSelected(slot.id, it) },
                 )
             }
+        }
+    }
+}
+
+@Composable
+private fun <T> LabeledChipRow(
+    options: List<T>,
+    optionLabel: (T) -> String,
+    isSelected: (T) -> Boolean,
+    onSelected: (T) -> Unit,
+) {
+    Row(
+        modifier = Modifier.horizontalScroll(rememberScrollState()),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        options.forEach { option ->
+            val selected = isSelected(option)
+            Text(
+                text = optionLabel(option),
+                color = Color.White,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(if (selected) Color.White.copy(alpha = 0.25f) else Color.Transparent)
+                    .clickable { onSelected(option) }
+                    .padding(horizontal = 10.dp, vertical = 6.dp)
+            )
         }
     }
 }
