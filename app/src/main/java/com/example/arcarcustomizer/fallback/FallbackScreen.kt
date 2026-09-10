@@ -65,12 +65,14 @@ fun FallbackScreen() {
                 environment = rememberEnvironment(environmentLoader, isOpaque = false) {
                     // createSkybox = false: only the HDR's indirect lighting is wanted here —
                     // its skybox would otherwise paint over the live camera feed behind it.
-                    // No HDR asset yet -> createHDREnvironment returns null and this falls
-                    // back to a neutral default environment.
-                    environmentLoader.createHDREnvironment(
-                        CarModelConfig.HDR_ASSET_PATH,
-                        createSkybox = false,
-                    ) ?: createEnvironment(environmentLoader, false)
+                    // No HDR asset exists yet, so this must tolerate createHDREnvironment
+                    // throwing (missing-asset I/O error), not just returning null.
+                    runCatching {
+                        environmentLoader.createHDREnvironment(
+                            CarModelConfig.HDR_ASSET_PATH,
+                            createSkybox = false,
+                        )
+                    }.getOrNull() ?: createEnvironment(environmentLoader, false)
                 },
             ) {
                 carModel?.let { model ->
