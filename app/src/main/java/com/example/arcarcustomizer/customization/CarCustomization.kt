@@ -61,6 +61,16 @@ object CarModelConfig {
     const val WHEEL_DIAMETER_METERS = 0.92f
 
     /**
+     * car.glb's own chassis (the "chasis_NONE" primitive) is ~6.17 units long as authored —
+     * true life-size for AR mode (walk around a real-size car in your driveway), but far too
+     * large for Fallback mode, which shows the car floating close in front of the camera like a
+     * small display model. This uniformly scales the WHOLE composite (body + wheel-well
+     * positions together, via the shared rig node) down to roughly a 0.6 m long toy replica.
+     * Re-measure/tune if car.glb changes or this doesn't look right on-device.
+     */
+    const val FALLBACK_SCALE = 0.1f
+
+    /**
      * HDR environment map for Fallback mode's indirect lighting (Phase 4). Until this asset
      * exists, [io.github.sceneview.loaders.EnvironmentLoader.createHDREnvironment] simply
      * returns `null` and callers fall back to a neutral default environment.

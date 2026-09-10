@@ -20,6 +20,7 @@ import io.github.sceneview.SceneView
 import io.github.sceneview.SurfaceType
 import io.github.sceneview.createEnvironment
 import io.github.sceneview.math.Position
+import io.github.sceneview.math.Scale
 import io.github.sceneview.math.Size
 import io.github.sceneview.node.ContactShadowContext
 import io.github.sceneview.node.Node as NodeImpl
@@ -76,10 +77,12 @@ fun FallbackScreen() {
                 },
             ) {
                 carModel?.let { model ->
-                    // Placeholder placement in front of the default camera — retune once the
-                    // real car .glb's actual size is known.
+                    // Scaled down from car.glb's ~6 m life-size (see FALLBACK_SCALE) so it reads
+                    // as a small display model floating in front of the camera, not something
+                    // the lens is essentially inside of.
                     Node(
                         position = Position(y = -0.3f, z = -1.5f),
+                        scale = Scale(CarModelConfig.FALLBACK_SCALE),
                         apply = { rigNode = this },
                     ) {
                         CustomizableCar(
