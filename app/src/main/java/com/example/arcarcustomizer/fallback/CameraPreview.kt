@@ -25,7 +25,16 @@ fun CameraPreview(modifier: Modifier = Modifier) {
     AndroidView(
         modifier = modifier.fillMaxSize(),
         factory = { ctx ->
-            val previewView = PreviewView(ctx)
+            val previewView = PreviewView(ctx).apply {
+                // PERFORMANCE (the default) backs the preview with a SurfaceView, which is
+                // composited by SurfaceFlinger as its own layer BEHIND the app's normal window
+                // surface — so the SceneView layer drawn "on top" of it in this same Box would
+                // actually just paint over an opaque window background, hiding the camera
+                // entirely. COMPATIBLE uses a TextureView instead, which composites inline with
+                // normal View/Compose content, letting the transparent SceneView layer above it
+                // actually show the camera feed through.
+                implementationMode = PreviewView.ImplementationMode.COMPATIBLE
+            }
             val cameraProviderFuture = ProcessCameraProvider.getInstance(ctx)
             cameraProviderFuture.addListener(
                 {
