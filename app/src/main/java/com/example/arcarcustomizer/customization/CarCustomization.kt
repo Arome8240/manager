@@ -469,7 +469,217 @@ private val LuxurySuv = CarModel(
     slots = listOf(kenneyWheels(0.81f, -0.71f), *generatedSlots(LuxurySuvBody, LuxurySuvLights, 1.719f)),
 )
 
-val CarCatalog = listOf(NissanGtr, LamborghiniAventador, SportsSedan, HotHatch, LuxurySuv)
+/*
+ * Real cars from Poly Pizza (all CC-BY 3.0 — credited in assets/models/CREDITS.txt). Each .glb
+ * already has a dedicated body-paint material and separate wheel nodes. Everything below was
+ * measured from the geometry in the .glb's own units: wheel centres from the wheel nodes, body
+ * anchors and the roof line by ray-casting, glass from the glass material, and lamps from the
+ * light materials (RX-7 tail lamps and Charger headlamps, which have none, from renders).
+ */
+
+private fun realWheels(positions: List<Position>, diameter: Float) = PartSlot(
+    id = "wheels",
+    label = "Wheels & Rims",
+    positions = positions,
+    targetSizeNative = diameter,
+    options = WheelOptions,
+)
+
+private val FerrariF40Body = BodyAnchors(
+    centerX = 0f, frontZ = 4.14f, rearZ = -3.558f,
+    noseBottomY = 0.1703f, tailBottomY = 0.2674f,
+    sillY = 0.2326f, sillHalfWidth = 1.519f, skirtZ = -1.744f..1.897f,
+    doorSideHalfWidth = 1.434f, doorY = 1.294f, doorZ = 0.07613f,
+    deckY = 1.41f, deckRearZ = -3.173f, wingZ = -2.48f,
+    topProfile = listOf(-3.327f to 2.14f, -3.085f to 1.388f, -2.844f to 1.423f, -2.603f to 1.508f, -2.362f to 1.676f, -2.121f to 1.832f, -1.879f to 1.976f, -1.638f to 2.098f, -1.397f to 2.173f, -1.156f to 2.2f, -0.915f to 2.223f, -0.673f to 2.236f, -0.432f to 2.25f, -0.191f to 2.253f, 0.05f to 2.249f, 0.291f to 2.246f, 0.533f to 2.224f, 0.774f to 2.199f, 1.015f to 2.147f, 1.256f to 1.95f, 1.497f to 1.81f, 1.739f to 1.675f, 1.98f to 1.586f, 2.221f to 1.49f, 2.462f to 1.394f, 2.703f to 1.299f, 2.945f to 1.202f, 3.186f to 1.099f, 3.427f to 0.995f, 3.668f to 0.884f, 3.909f to 0.765f),
+    glassZ = listOf(1.135f..1.86f),
+)
+private val FerrariF40Lights = CarLights(
+    head = listOf(LightPanel(Position(-1.095f, 0.8281f, 4.018f), 0.5331f, 0.2762f), LightPanel(Position(1.095f, 0.8281f, 4.018f), 0.5331f, 0.2762f)),
+    tail = listOf(LightPanel(Position(-0.9705f, 1.119f, -3.45f), 0.5144f, 0.1971f), LightPanel(Position(0.9705f, 1.119f, -3.45f), 0.5144f, 0.1971f)),
+)
+/** "Ferrari F40" by PuKkBuMXDD (https://poly.pizza/m/RTwim9bhNd), CC-BY 3.0. */
+private val FerrariF40 = CarModel(
+    id = "ferrari_f40",
+    label = "Ferrari F40",
+    assetPath = "models/car_ferrari_f40.glb",
+    bodyMaterialName = "bodywork",
+    hiddenNativeNodeNames = setOf("wheel_front_left", "wheel_front_right", "wheel_back_left", "wheel_back_right"),
+    nativeToMeters = 0.5664f,
+    baseStats = CarStats(topSpeed = 0.88f, acceleration = 0.86f, handling = 0.8f),
+    body = FerrariF40Body,
+    lights = FerrariF40Lights,
+    slots = listOf(
+        realWheels(listOf(Position(1.422f, 0.5002f, 2.534f), Position(-1.422f, 0.5002f, 2.534f), Position(1.378f, 0.5091f, -2.382f), Position(-1.378f, 0.5091f, -2.382f)), diameter = 1.063f),
+        *generatedSlots(FerrariF40Body, FerrariF40Lights, 0.5664f),
+    ),
+)
+
+private val DodgeChallengerBody = BodyAnchors(
+    centerX = 0f, frontZ = 5.68f, rearZ = -5.683f,
+    noseBottomY = -1.366f, tailBottomY = -1.056f,
+    sillY = -1.28f, sillHalfWidth = 2.012f, skirtZ = -2.158f..2.453f,
+    doorSideHalfWidth = 2.168f, doorY = 0.2454f, doorZ = 0.1475f,
+    deckY = 0.7657f, deckRearZ = -5.115f, wingZ = -4.092f,
+    topProfile = listOf(-5.342f to 0.827f, -4.986f to 0.736f, -4.63f to 0.786f, -4.274f to 0.835f, -3.918f to 0.899f, -3.562f to 1.033f, -3.206f to 1.213f, -2.85f to 1.393f, -2.494f to 1.524f, -2.138f to 1.59f, -1.782f to 1.614f, -1.425f to 1.626f, -1.069f to 1.626f, -0.713f to 1.626f, -0.357f to 1.626f, -0.001f to 1.608f, 0.355f to 1.581f, 0.711f to 1.514f, 1.067f to 1.344f, 1.423f to 1.191f, 1.779f to 1.027f, 2.135f to 0.853f, 2.491f to 0.694f, 2.847f to 0.712f, 3.203f to 0.707f, 3.559f to 0.701f, 3.915f to 0.681f, 4.271f to 0.657f, 4.627f to 0.634f, 4.983f to 0.409f, 5.339f to 0.298f),
+    glassZ = listOf(-3.74f..-2.672f, 0.889f..2.313f),
+)
+private val DodgeChallengerLights = CarLights(
+    head = listOf(LightPanel(Position(-1.717f, -0.04577f, 5.12f), 0.339f, 0.2958f), LightPanel(Position(1.717f, -0.04577f, 5.12f), 0.339f, 0.2958f)),
+    tail = listOf(LightPanel(Position(-1.112f, -0.08935f, -5.542f), 1.282f, 1.112f), LightPanel(Position(1.112f, -0.08935f, -5.542f), 1.282f, 1.112f)),
+)
+/** "Dodge Challenger" by Grzybek (https://poly.pizza/m/1jB8I4t5w4), CC-BY 3.0. */
+private val DodgeChallenger = CarModel(
+    id = "dodge_challenger",
+    label = "Dodge Challenger",
+    assetPath = "models/car_dodge_challenger.glb",
+    bodyMaterialName = "Body",
+    hiddenNativeNodeNames = setOf("Wheel.001", "Wheel.002", "Wheel.003", "Wheel.004"),
+    nativeToMeters = 0.4418f,
+    baseStats = CarStats(topSpeed = 0.82f, acceleration = 0.8f, handling = 0.62f),
+    body = DodgeChallengerBody,
+    lights = DodgeChallengerLights,
+    slots = listOf(
+        realWheels(listOf(Position(1.779f, -0.8832f, 3.481f), Position(1.779f, -0.8832f, -3.186f), Position(-1.764f, -0.8832f, -3.186f), Position(-1.764f, -0.8832f, 3.481f)), diameter = 1.713f),
+        *generatedSlots(DodgeChallengerBody, DodgeChallengerLights, 0.4418f),
+    ),
+)
+
+private val MazdaRx7Body = BodyAnchors(
+    centerX = -0.002447f, frontZ = 2.155f, rearZ = -2.165f,
+    noseBottomY = 0.1594f, tailBottomY = 0.2239f,
+    sillY = 0.1763f, sillHalfWidth = 0.8371f, skirtZ = -0.8485f..0.8418f,
+    doorSideHalfWidth = 0.8739f, doorY = 0.6657f, doorZ = -0.003338f,
+    deckY = 0.9434f, deckRearZ = -1.949f, wingZ = -1.56f,
+    topProfile = listOf(-2.036f to 0.922f, -1.9f to 0.924f, -1.765f to 0.959f, -1.63f to 1.003f, -1.494f to 1.049f, -1.359f to 1.095f, -1.223f to 1.145f, -1.088f to 1.183f, -0.953f to 1.225f, -0.817f to 1.254f, -0.682f to 1.262f, -0.547f to 1.263f, -0.411f to 1.264f, -0.276f to 1.26f, -0.141f to 1.254f, -0.005f to 1.227f, 0.13f to 1.165f, 0.265f to 1.1f, 0.401f to 1.037f, 0.536f to 0.973f, 0.672f to 0.909f, 0.807f to 0.865f, 0.942f to 0.861f, 1.078f to 0.853f, 1.213f to 0.843f, 1.348f to 0.831f, 1.484f to 0.763f, 1.619f to 0.734f, 1.754f to 0.699f, 1.89f to 0.662f, 2.025f to 0.617f),
+    glassZ = listOf(-1.833f..-1.02f, 0.06232f..0.7397f),
+)
+private val MazdaRx7Lights = CarLights(
+    head = listOf(LightPanel(Position(-0.5671f, 0.6759f, 1.958f), 0.1912f, 0.1238f), LightPanel(Position(0.5622f, 0.6759f, 1.958f), 0.1912f, 0.1238f)),
+    tail = listOf(LightPanel(Position(0.52f, 0.735f, -2.038f), 0.28f, 0.06f), LightPanel(Position(-0.52f, 0.735f, -2.039f), 0.28f, 0.06f)),
+)
+/** "Mazda RX-7" by IvOfficial (https://poly.pizza/m/SnIoWlh7S2), CC-BY 3.0. */
+private val MazdaRx7 = CarModel(
+    id = "mazda_rx7",
+    label = "Mazda RX-7",
+    assetPath = "models/car_mazda_rx7.glb",
+    bodyMaterialName = "Body_paint",
+    hiddenNativeNodeNames = setOf("FL_WHEEL", "FR_WHEEL", "RL_WHEEL", "RR_WHEEL"),
+    nativeToMeters = 0.9931f,
+    baseStats = CarStats(topSpeed = 0.74f, acceleration = 0.78f, handling = 0.84f),
+    body = MazdaRx7Body,
+    lights = MazdaRx7Lights,
+    slots = listOf(
+        realWheels(listOf(Position(0.7474f, 0.3063f, 1.221f), Position(-0.7479f, 0.3063f, 1.221f), Position(0.7474f, 0.3063f, -1.228f), Position(-0.7479f, 0.3063f, -1.228f)), diameter = 0.6321f),
+        *generatedSlots(MazdaRx7Body, MazdaRx7Lights, 0.9931f),
+    ),
+)
+
+private val DeloreanDmc12Body = BodyAnchors(
+    centerX = -0.004954f, frontZ = 3.249f, rearZ = -2.222f,
+    noseBottomY = -0.4664f, tailBottomY = -0.3018f,
+    sillY = -0.5427f, sillHalfWidth = 1.19f, skirtZ = -0.4973f..1.57f,
+    doorSideHalfWidth = 1.208f, doorY = 0.09035f, doorZ = 0.5365f,
+    deckY = 0.4086f, deckRearZ = -1.948f, wingZ = -1.456f,
+    topProfile = listOf(-2.058f to 0.346f, -1.886f to 0.395f, -1.715f to 0.445f, -1.544f to 0.472f, -1.372f to 0.517f, -1.201f to 0.565f, -1.029f to 0.592f, -0.858f to 0.64f, -0.686f to 0.673f, -0.515f to 0.716f, -0.344f to 0.721f, -0.172f to 0.721f, -0.001f to 0.721f, 0.171f to 0.721f, 0.342f to 0.721f, 0.513f to 0.721f, 0.685f to 0.668f, 0.856f to 0.591f, 1.028f to 0.515f, 1.199f to 0.438f, 1.371f to 0.362f, 1.542f to 0.302f, 1.713f to 0.289f, 1.885f to 0.27f, 2.056f to 0.25f, 2.228f to 0.229f, 2.399f to 0.208f, 2.57f to 0.187f, 2.742f to 0.166f, 2.913f to 0.146f, 3.085f to 0.096f),
+    glassZ = listOf(0.5993f..1.457f),
+)
+private val DeloreanDmc12Lights = CarLights(
+    head = listOf(LightPanel(Position(-0.8426f, 0.004189f, 3.124f), 0.6162f, 0.1569f), LightPanel(Position(0.8197f, 0.009797f, 3.127f), 0.6163f, 0.1565f)),
+    tail = listOf(LightPanel(Position(-0.7456f, 0.1604f, -2.111f), 0.3846f, 0.1968f), LightPanel(Position(0.7491f, 0.1656f, -2.107f), 0.386f, 0.1965f)),
+)
+/** "DeLorean DMC-12" by David Sirera (https://poly.pizza/m/1uZKezeldGG), CC-BY 3.0. */
+private val DeloreanDmc12 = CarModel(
+    id = "delorean_dmc12",
+    label = "DeLorean DMC-12",
+    assetPath = "models/car_delorean_dmc12.glb",
+    bodyMaterialName = "Chasis",
+    hiddenNativeNodeNames = setOf("Wheel_fl_Circle", "Wheel_rl_Circle.001", "Wheel_rr_Circle.002", "Wheel_fr_Circle.003"),
+    nativeToMeters = 0.7805f,
+    baseStats = CarStats(topSpeed = 0.6f, acceleration = 0.56f, handling = 0.62f),
+    body = DeloreanDmc12Body,
+    lights = DeloreanDmc12Lights,
+    slots = listOf(
+        realWheels(listOf(Position(1.107f, -0.4022f, 2.106f), Position(1.094f, -0.4023f, -1.021f), Position(-1.108f, -0.41f, -1.033f), Position(-1.111f, -0.41f, 2.095f)), diameter = 0.892f),
+        *generatedSlots(DeloreanDmc12Body, DeloreanDmc12Lights, 0.7805f),
+    ),
+)
+
+private val DodgeChargerBody = BodyAnchors(
+    centerX = 0f, frontZ = 3.151f, rearZ = -3.334f,
+    noseBottomY = 0.1291f, tailBottomY = 0.163f,
+    sillY = 0.009166f, sillHalfWidth = 1.249f, skirtZ = -1.122f..1.492f,
+    doorSideHalfWidth = 1.258f, doorY = 0.4614f, doorZ = 0.1849f,
+    deckY = 0.8779f, deckRearZ = -3.009f, wingZ = -2.426f,
+    topProfile = listOf(-3.139f to 0.887f, -2.936f to 0.864f, -2.733f to 0.887f, -2.53f to 0.911f, -2.326f to 0.929f, -2.123f to 1f, -1.92f to 1.083f, -1.717f to 1.163f, -1.514f to 1.248f, -1.31f to 1.331f, -1.107f to 1.36f, -0.904f to 1.385f, -0.701f to 1.393f, -0.498f to 1.401f, -0.294f to 1.401f, -0.091f to 1.401f, 0.112f to 1.401f, 0.315f to 1.401f, 0.518f to 1.365f, 0.722f to 1.203f, 0.925f to 1.043f, 1.128f to 0.91f, 1.331f to 0.9f, 1.534f to 0.89f, 1.738f to 0.88f, 1.941f to 0.87f, 2.144f to 0.861f, 2.347f to 0.851f, 2.55f to 0.837f, 2.754f to 0.818f, 2.957f to 0.78f),
+    glassZ = listOf(-2.225f..-1.615f, 0.6204f..1.027f),
+)
+private val DodgeChargerLights = CarLights(
+    // Hidden headlamps behind the grille, located from a front render (no separate lamp material).
+    head = listOf(LightPanel(Position(0.75f, 0.61f, 3.01f), 0.26f, 0.14f), LightPanel(Position(-0.75f, 0.61f, 3.009f), 0.26f, 0.14f)),
+    tail = listOf(LightPanel(Position(-0.6484f, 0.6826f, -3.185f), 0.6082f, 0.1315f), LightPanel(Position(0.6484f, 0.6826f, -3.185f), 0.6082f, 0.1315f)),
+)
+/** "Dodge Charger" by David Sirera (https://poly.pizza/m/4b80hRVxqvv), CC-BY 3.0. */
+private val DodgeCharger = CarModel(
+    id = "dodge_charger",
+    label = "Dodge Charger",
+    assetPath = "models/car_dodge_charger.glb",
+    bodyMaterialName = "Red_Chasis",
+    hiddenNativeNodeNames = setOf("Circle.001", "Circle.002", "Circle.003", "Circle.004"),
+    nativeToMeters = 0.8142f,
+    baseStats = CarStats(topSpeed = 0.78f, acceleration = 0.82f, handling = 0.58f),
+    body = DodgeChargerBody,
+    lights = DodgeChargerLights,
+    slots = listOf(
+        realWheels(listOf(Position(-1.074f, 0.09219f, -1.644f), Position(-1.078f, 0.06816f, 2.014f), Position(1.058f, 0.0675f, 2.014f), Position(1.057f, 0.09153f, -1.644f)), diameter = 0.8702f),
+        *generatedSlots(DodgeChargerBody, DodgeChargerLights, 0.8142f),
+    ),
+)
+
+private val ChevroletCamaroBody = BodyAnchors(
+    centerX = 0f, frontZ = 2.578f, rearZ = -1.488f,
+    noseBottomY = 0.3421f, tailBottomY = 0.3084f,
+    sillY = 0.3439f, sillHalfWidth = 0.7989f, skirtZ = -0.4679f..1.386f,
+    doorSideHalfWidth = 0.7934f, doorY = 0.9564f, doorZ = 0.4592f,
+    deckY = 0.3402f, deckRearZ = -1.285f, wingZ = -0.9188f,
+    topProfile = listOf(-1.366f to 1.011f, -1.111f to 1.084f, -0.984f to 1.108f, -0.856f to 1.167f, -0.729f to 1.274f, -0.602f to 1.37f, -0.474f to 1.468f, -0.347f to 1.491f, -0.219f to 1.511f, -0.092f to 1.522f, 0.035f to 1.529f, 0.163f to 1.533f, 0.29f to 1.535f, 0.417f to 1.538f, 0.545f to 1.535f, 0.672f to 1.53f, 0.8f to 1.524f, 0.927f to 1.428f, 1.054f to 1.353f, 1.182f to 1.283f, 1.309f to 1.221f, 1.437f to 1.206f, 1.564f to 1.185f, 1.691f to 1.164f, 1.819f to 1.143f, 1.946f to 1.122f, 2.074f to 1.101f, 2.201f to 0.349f, 2.456f to 1.001f),
+    glassZ = listOf(-0.9197f..-0.5383f, 0.8633f..1.373f),
+)
+private val ChevroletCamaroLights = CarLights(
+    head = listOf(LightPanel(Position(-0.5798f, 0.7184f, 2.421f), 0.2053f, 0.38f), LightPanel(Position(0.5798f, 0.7184f, 2.421f), 0.2053f, 0.38f)),
+    tail = listOf(LightPanel(Position(-0.5071f, 0.807f, -1.39f), 0.2718f, 0.3387f), LightPanel(Position(0.5071f, 0.807f, -1.39f), 0.2718f, 0.3387f)),
+)
+/** "Chevrolet Camaro" by PuKkBuMXDD (https://poly.pizza/m/kVcKsd2dEk), CC-BY 3.0. */
+private val ChevroletCamaro = CarModel(
+    id = "chevrolet_camaro",
+    label = "Chevrolet Camaro",
+    assetPath = "models/car_chevrolet_camaro.glb",
+    bodyMaterialName = "bodywork",
+    hiddenNativeNodeNames = setOf("wheel_front_left", "wheel_front_right", "wheel_back_left", "wheel_back_right"),
+    nativeToMeters = 1.176f,
+    baseStats = CarStats(topSpeed = 0.8f, acceleration = 0.82f, handling = 0.7f),
+    body = ChevroletCamaroBody,
+    lights = ChevroletCamaroLights,
+    slots = listOf(
+        realWheels(listOf(Position(0.7763f, 0.5708f, 1.73f), Position(-0.7763f, 0.5708f, 1.73f), Position(0.745f, 0.58f, -0.8117f), Position(-0.7618f, 0.58f, -0.8117f)), diameter = 0.573f),
+        *generatedSlots(ChevroletCamaroBody, ChevroletCamaroLights, 1.176f),
+    ),
+    stockSpoilerNodeNames = setOf("aileron"),
+)
+
+val CarCatalog = listOf(
+    NissanGtr,
+    LamborghiniAventador,
+    FerrariF40,
+    DodgeChallenger,
+    MazdaRx7,
+    DeloreanDmc12,
+    DodgeCharger,
+    ChevroletCamaro,
+    SportsSedan,
+    HotHatch,
+    LuxurySuv,
+)
 
 /** A selectable paint color, applied to the body material's baseColorFactor. Car-independent. */
 data class CarPaint(val label: String, val color: Color)

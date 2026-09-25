@@ -1,0 +1,25 @@
+3D car models used in this app
+==============================
+
+Licensed CC-BY 3.0 (https://creativecommons.org/licenses/by/3.0/) — attribution required.
+All from Poly Pizza (https://poly.pizza):
+
+  car_nissan_gtr.glb          "Nissan GTR" by David Sirera — https://poly.pizza/m/a_HKCtYAv2W
+  car_lamborghini.glb         "CAR Model" by Ignition Labs — https://poly.pizza/m/5zUWP5UsLg-
+  car_ferrari_f40.glb         "Ferrari F40" by PuKkBuMXDD — https://poly.pizza/m/RTwim9bhNd
+  car_dodge_challenger.glb    "2015 Dodge Challenger" by Grzybek — https://poly.pizza/m/1jB8I4t5w4
+                              (modified: embedded Blender light/camera removed)
+  car_mazda_rx7.glb           "Mazda RX-7" by IvOfficial — https://poly.pizza/m/SnIoWlh7S2
+  car_delorean_dmc12.glb      "DeLorean DMC-12" by David Sirera — https://poly.pizza/m/1uZKezeldGG
+  car_dodge_charger.glb       "Dodge Charger" by David Sirera — https://poly.pizza/m/4b80hRVxqvv
+  car_chevrolet_camaro.glb    "Chevrolet Camaro" by PuKkBuMXDD — https://poly.pizza/m/kVcKsd2dEk
+
+Licensed CC0 (public domain):
+
+  car_sports_sedan.glb, car_hot_hatch.glb, car_luxury_suv.glb
+    From "Car Kit" (3.1) by Kenney — https://kenney.nl/assets/car-kit
+    Modified: palette texture embedded, and body-colour triangles moved into a separate
+    "paint" material (grayscale copy of the palette) so the body can be repainted.
+
+Vehicle makes and model names are trademarks of their respective owners; these models are
+fan-made low-poly representations and are not affiliated with or endorsed by the manufacturers.
