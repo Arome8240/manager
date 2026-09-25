@@ -18,6 +18,7 @@ import androidx.compose.foundation.gestures.calculatePan
 import androidx.compose.foundation.gestures.calculateZoom
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -200,38 +201,73 @@ private fun ShowroomBackdrop() {
     }
 }
 
+/**
+ * HUD layout. Wide screens (landscape, tablets) put the hand-off button and stats top-right;
+ * narrow ones stack the stats under the car name and move the button down above the picker, so
+ * the car name never gets squeezed.
+ */
 @Composable
 private fun GarageHud(state: CustomizationState, liveViewLabel: String?, onOpenLiveView: () -> Unit) {
-    Box(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(start = 16.dp, top = 12.dp, end = 16.dp),
-            verticalAlignment = Alignment.Top,
-        ) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().safeDrawingPadding()) {
+        val compact = maxWidth < 600.dp
+        val switcher = @Composable { modifier: Modifier ->
             CarSwitcher(
                 car = state.car,
                 onCycle = state::cycleCar,
-                modifier = Modifier.weight(1f).entrance(delayMillis = 100, fromX = (-40).dp),
+                modifier = modifier.entrance(delayMillis = 100, fromX = (-40).dp),
             )
+        }
+
+        if (compact) {
             Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, top = 12.dp, end = 16.dp),
                 horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.entrance(delayMillis = 250, fromX = 40.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                LiveViewButton(liveViewLabel, onOpenLiveView)
-                StatsPanel(state)
+                switcher(Modifier.fillMaxWidth())
+                StatsPanel(state, Modifier.entrance(delayMillis = 250, fromX = 40.dp))
+            }
+        } else {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, top = 12.dp, end = 16.dp),
+                verticalAlignment = Alignment.Top,
+            ) {
+                switcher(Modifier.weight(1f))
+                Column(
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                    modifier = Modifier.entrance(delayMillis = 250, fromX = 40.dp),
+                ) {
+                    LiveViewButton(liveViewLabel, onOpenLiveView)
+                    StatsPanel(state)
+                }
             }
         }
 
-        PartPicker(
-            state = state,
+        Column(
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .fillMaxWidth()
-                .padding(bottom = 16.dp)
-                .entrance(delayMillis = 400, fromY = 60.dp),
-        )
+                .padding(bottom = 16.dp),
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (compact) {
+                LiveViewButton(
+                    liveViewLabel,
+                    onOpenLiveView,
+                    Modifier.padding(end = 16.dp).entrance(delayMillis = 300, fromX = 40.dp),
+                )
+            }
+            PartPicker(
+                state = state,
+                modifier = Modifier.fillMaxWidth().entrance(delayMillis = 400, fromY = 60.dp),
+            )
+        }
     }
 }
 
@@ -260,7 +296,7 @@ private fun CarSwitcher(car: CarModel, onCycle: (Int) -> Unit, modifier: Modifie
                 val make = shownCar.label.substringBefore(' ')
                 val model = shownCar.label.substringAfter(' ', missingDelimiterValue = "")
                 Column {
-                    Text(make.uppercase(), style = garageText(size = 14.sp, color = GarageColors.TextMuted, letterSpacing = 3.sp))
+                    Text(make.uppercase(), style = garageText(size = 14.sp, color = GarageColors.TextMuted, letterSpacing = 3.sp), maxLines = 1, softWrap = false)
                     ScrambleText(model.ifEmpty { make }.uppercase(), style = garageText(size = 34.sp))
                 }
             }
@@ -305,12 +341,12 @@ private fun ScrambleText(text: String, style: TextStyle) {
 }
 
 @Composable
-private fun LiveViewButton(label: String?, onClick: () -> Unit) {
+private fun LiveViewButton(label: String?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val enabled = label != null
     Text(
         text = (label ?: "CHECKING AR…") + if (enabled) "  ›" else "",
         style = garageText(size = 15.sp, color = if (enabled) Color.White else GarageColors.TextMuted),
-        modifier = Modifier
+        modifier = modifier
             .clip(SlantedShape(10.dp))
             .background(if (enabled) GarageColors.Action else GarageColors.Panel)
             .clickable(enabled = enabled, onClick = onClick)
@@ -319,10 +355,10 @@ private fun LiveViewButton(label: String?, onClick: () -> Unit) {
 }
 
 @Composable
-private fun StatsPanel(state: CustomizationState) {
+private fun StatsPanel(state: CustomizationState, modifier: Modifier = Modifier) {
     val stats = state.stats
     Column(
-        modifier = Modifier
+        modifier = modifier
             .width(168.dp)
             .clip(SlantedShape(12.dp))
             .background(GarageColors.Panel)
