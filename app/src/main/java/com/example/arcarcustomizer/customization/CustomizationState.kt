@@ -96,13 +96,16 @@ data class CarFootprint(
 
 val CarModel.footprint: CarFootprint
     get() {
-        val points = slots.flatMap { it.positions }.map { it * nativeToMeters }
+        // Model slots only (wheels, steering wheel): generated slots' positions are camera aims,
+        // not geometry.
+        val modelSlots = slots.filter { it.isModelSlot }
+        val points = modelSlots.flatMap { it.positions }.map { it * nativeToMeters }
         val minX = points.minOf { it.x }
         val maxX = points.maxOf { it.x }
         val minZ = points.minOf { it.z }
         val maxZ = points.maxOf { it.z }
         // Lowest point any part reaches, i.e. the bottom of the tyres.
-        val groundY = slots.minOf { slot ->
+        val groundY = modelSlots.minOf { slot ->
             slot.positions.minOf { it.y } - slot.targetSizeNative / 2f
         } * nativeToMeters
         // Slot positions only span the wheelbase and track. Bodywork overhangs the wheelbase by

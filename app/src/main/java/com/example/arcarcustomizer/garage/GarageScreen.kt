@@ -155,6 +155,7 @@ fun GarageScreen(
             CustomizableCar(
                 car = car,
                 partModelLoader = modelLoader,
+                materialLoader = materialLoader,
                 paint = state.paint,
                 selectedOptions = state.selectedOptions,
             )

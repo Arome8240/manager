@@ -25,6 +25,7 @@ import com.google.ar.core.Anchor
 import com.google.ar.core.HitResult
 import io.github.sceneview.ar.ARSceneView
 import io.github.sceneview.rememberEngine
+import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 import io.github.sceneview.rememberOnGestureListener
 
@@ -41,6 +42,7 @@ fun ArPlacementScreen(state: CustomizationState, onBack: () -> Unit) {
 
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
+    val materialLoader = rememberMaterialLoader(engine)
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
         val viewWidthPx = constraints.maxWidth.toFloat()
@@ -76,6 +78,7 @@ fun ArPlacementScreen(state: CustomizationState, onBack: () -> Unit) {
                         CustomizableCar(
                             car = state.car,
                             partModelLoader = modelLoader,
+                            materialLoader = materialLoader,
                             paint = state.paint,
                             selectedOptions = state.selectedOptions,
                         )

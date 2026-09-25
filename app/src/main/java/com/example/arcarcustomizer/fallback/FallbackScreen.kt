@@ -26,6 +26,7 @@ import io.github.sceneview.node.Node as NodeImpl
 import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberEnvironment
 import io.github.sceneview.rememberEnvironmentLoader
+import io.github.sceneview.rememberMaterialLoader
 import io.github.sceneview.rememberModelLoader
 
 /** Car appears at real-world scale via [com.example.arcarcustomizer.customization.CarModel]'s own
@@ -47,6 +48,7 @@ fun FallbackScreen(state: CustomizationState, onBack: () -> Unit) {
 
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
+    val materialLoader = rememberMaterialLoader(engine)
     val environmentLoader = rememberEnvironmentLoader(engine)
 
     RegisterDeviceRotationListener { rotation -> rigNode?.rotation = rotation }
@@ -84,6 +86,7 @@ fun FallbackScreen(state: CustomizationState, onBack: () -> Unit) {
                     CustomizableCar(
                         car = state.car,
                         partModelLoader = modelLoader,
+                        materialLoader = materialLoader,
                         paint = state.paint,
                         selectedOptions = state.selectedOptions,
                     )

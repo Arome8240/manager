@@ -80,7 +80,7 @@ fun cameraShotFor(car: CarModel, category: CustomizationCategory): CameraShot {
                 CameraShot(
                     target = target,
                     azimuth = facing + 25f.deg(),
-                    elevation = 10f.deg(),
+                    elevation = (slot.cameraElevationDeg ?: 10f).deg(),
                     frameRadius = partRadius,
                     minDistance = footprint.edgeDistance(facing) - fromCenter + 0.6f,
                     autoOrbit = false,

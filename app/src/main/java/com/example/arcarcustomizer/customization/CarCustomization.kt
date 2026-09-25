@@ -6,21 +6,33 @@ import androidx.compose.runtime.key
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import io.github.sceneview.SceneScope
+import io.github.sceneview.loaders.MaterialLoader
 import io.github.sceneview.loaders.ModelLoader
 import io.github.sceneview.math.Position
 import io.github.sceneview.math.Scale
 import io.github.sceneview.model.ModelInstance
 import io.github.sceneview.rememberModelInstance
 
+/** What an option puts on the car: a loaded .glb, or a part generated in code. */
+sealed interface PartVisual {
+    data class Model(val assetPath: String) : PartVisual
+    data class Generated(val part: GeneratedPart) : PartVisual
+}
+
 /**
- * One selectable part model for a [PartSlot] (a specific tire, rim, steering wheel, headlight,
- * etc.).
+ * One selectable option for a [PartSlot] (a specific tire, spoiler, decal set, etc.).
  */
 data class PartOption(
     val label: String,
-    val assetPath: String,
+    val visual: PartVisual,
     val statDelta: CarStats = CarStats.Zero,
-)
+) {
+    constructor(label: String, assetPath: String, statDelta: CarStats = CarStats.Zero) :
+        this(label, PartVisual.Model(assetPath), statDelta)
+
+    constructor(label: String, part: GeneratedPart, statDelta: CarStats = CarStats.Zero) :
+        this(label, PartVisual.Generated(part), statDelta)
+}
 
 /**
  * Garage performance read-out, each stat on a 0..1 scale. These are illustrative game-style
@@ -42,6 +54,10 @@ data class CarStats(val topSpeed: Float, val acceleration: Float, val handling: 
  * A customizable slot on a car — e.g. "wheels" (4 positions) or "steering wheel" (1 position).
  * [positions] and [targetSizeNative] are in the owning [CarModel]'s own native asset units (see
  * [CarModel.nativeToMeters]) — measured directly from that car's glTF geometry, not real meters.
+ *
+ * For [PartVisual.Model] options they place and size each model instance. Generated parts fit
+ * themselves to [CarModel.body], so for those slots [positions] and [targetSizeNative] only
+ * tell the garage camera what to frame.
  */
 data class PartSlot(
     val id: String,
@@ -49,7 +65,12 @@ data class PartSlot(
     val positions: List<Position>,
     val targetSizeNative: Float,
     val options: List<PartOption>,
-)
+    /** Garage camera height for this slot's close-up; null uses the default low angle. */
+    val cameraElevationDeg: Float? = null,
+) {
+    /** Whether this slot's parts are loaded models placed at [positions]. */
+    val isModelSlot get() = options.all { it.visual is PartVisual.Model }
+}
 
 /**
  * One selectable car body, with everything about it that's specific to its own .glb: which
@@ -68,6 +89,7 @@ data class CarModel(
     val hiddenNativeNodeNames: Set<String>,
     val nativeToMeters: Float,
     val baseStats: CarStats,
+    val body: BodyAnchors,
     val slots: List<PartSlot>,
 )
 
@@ -87,6 +109,122 @@ private val SteeringWheelOptions = listOf(
     PartOption("Steering Wheel", "models/wheels_steering_wheel.glb"),
 )
 
+// Stat deltas are illustrative, like CarStats itself.
+private val SpoilerOptions = listOf(
+    PartOption("Stock", GeneratedPart.None),
+    PartOption("Lip", GeneratedPart.LipSpoiler, CarStats(0f, 0f, 0.02f)),
+    PartOption("Ducktail", GeneratedPart.Ducktail, CarStats(0f, 0f, 0.03f)),
+    PartOption("GT Wing", GeneratedPart.GtWing, CarStats(-0.03f, 0f, 0.08f)),
+)
+
+private val BodyKitOptions = listOf(
+    PartOption("Stock", GeneratedPart.None),
+    PartOption("Street", GeneratedPart.StreetKit, CarStats(0.01f, 0f, 0.02f)),
+    PartOption("Track", GeneratedPart.TrackKit, CarStats(0.01f, 0.02f, 0.05f)),
+)
+
+private val DecalOptions = listOf(
+    PartOption("None", GeneratedPart.None),
+    PartOption("Racing Stripes", GeneratedPart.RacingStripes),
+    PartOption("Race Number", GeneratedPart.RaceNumber),
+    PartOption("Side Livery", GeneratedPart.SideLivery),
+)
+
+/**
+ * Spoiler / body kit / decal slots, anchored on [body]. The positions and sizes here only aim
+ * the garage camera: the rear deck for spoilers, the front corner for body kits, the door (from
+ * higher up, to take in the stripes too) for decals.
+ */
+private fun generatedSlots(body: BodyAnchors, nativeToMeters: Float): Array<PartSlot> {
+    val u = 1f / nativeToMeters
+    return arrayOf(
+        PartSlot(
+            id = "spoiler",
+            label = "Spoilers",
+            positions = listOf(Position(body.centerX, body.deckY + 0.2f * u, body.deckRearZ)),
+            targetSizeNative = 1.3f * u,
+            options = SpoilerOptions,
+            cameraElevationDeg = 16f,
+        ),
+        PartSlot(
+            id = "bodyKit",
+            label = "Body Kits",
+            positions = listOf(Position(body.centerX + body.sillHalfWidth, body.sillY, body.frontZ - 0.9f * u)),
+            targetSizeNative = 1.8f * u,
+            options = BodyKitOptions,
+            cameraElevationDeg = 6f,
+        ),
+        PartSlot(
+            id = "decals",
+            label = "Decals",
+            positions = listOf(Position(body.centerX + body.doorSideHalfWidth, body.doorY, body.doorZ)),
+            targetSizeNative = 2.2f * u,
+            options = DecalOptions,
+            cameraElevationDeg = 30f,
+        ),
+    )
+}
+
+/** Ray-cast from car_nissan_gtr.glb's triangles (metres). The stock wing sits at z≈-2.53, y≈0.74. */
+private val NissanGtrBody = BodyAnchors(
+    centerX = 0f,
+    frontZ = 3.17f,
+    rearZ = -2.94f,
+    noseBottomY = -0.60f,
+    tailBottomY = -0.40f,
+    sillY = -0.55f,
+    sillHalfWidth = 1.17f,
+    skirtZ = -1.05f..1.35f,
+    doorSideHalfWidth = 1.16f,
+    doorY = 0.08f,
+    doorZ = -0.2f,
+    deckY = 0.55f,
+    deckRearZ = -2.78f,
+    wingZ = -2.62f,
+    topProfile = listOf(
+        -2.74f to 0.520f, -2.53f to 0.545f, -2.33f to 0.570f, -2.12f to 0.585f,
+        -1.92f to 0.657f, -1.71f to 0.729f, -1.50f to 0.801f, -1.30f to 0.873f,
+        -1.09f to 0.945f, -0.89f to 0.980f, -0.68f to 0.997f, -0.48f to 0.997f,
+        -0.27f to 0.994f, -0.07f to 0.986f, 0.14f to 0.977f, 0.35f to 0.947f,
+        0.55f to 0.877f, 0.76f to 0.779f, 0.96f to 0.682f, 1.17f to 0.585f,
+        1.37f to 0.488f, 1.58f to 0.450f, 1.79f to 0.426f, 1.99f to 0.401f,
+        2.20f to 0.376f, 2.40f to 0.342f, 2.61f to 0.296f, 2.81f to 0.249f,
+        3.02f to 0.175f,
+    ),
+    glassZ = listOf(-1.95f..-1.1f, 0.42f..1.42f),
+)
+
+/**
+ * Ray-cast from car_lamborghini.glb's triangles (centimetres; the body is centred on
+ * x≈-19.5). The stock wing sits right at the tail (z≈-255, y≈106-110).
+ */
+private val LamborghiniAventadorBody = BodyAnchors(
+    centerX = -19.54f,
+    frontZ = 194f,
+    rearZ = -234f,
+    noseBottomY = 13f,
+    tailBottomY = 19f,
+    sillY = 14f,
+    sillHalfWidth = 100f,
+    skirtZ = -132f..58f,
+    doorSideHalfWidth = 96f,
+    doorY = 48f,
+    doorZ = -25f,
+    deckY = 91f,
+    deckRearZ = -242f,
+    wingZ = -222f,
+    topProfile = listOf(
+        -239.1f to 90.9f, -222.8f to 93.9f, -206.5f to 90.9f, -190.2f to 96.5f,
+        -173.9f to 97.1f, -157.6f to 101.3f, -141.3f to 105.1f, -124.9f to 105.1f,
+        -108.6f to 112.4f, -92.3f to 114.2f, -76.0f to 115.6f, -59.7f to 116.5f,
+        -43.4f to 116.5f, -27.1f to 116.0f, -10.7f to 114.8f, 5.6f to 113.0f,
+        21.9f to 109.8f, 38.2f to 105.2f, 54.5f to 100.4f, 70.8f to 94.9f,
+        87.2f to 88.9f, 103.5f to 82.9f, 119.8f to 79.7f, 136.1f to 76.1f,
+        152.4f to 71.9f, 168.7f to 67.5f, 185.0f to 60.8f, 201.4f to 52.7f,
+    ),
+    glassZ = listOf(0f..62f),
+)
+
 /**
  * Measured directly from car_nissan_gtr.glb's glTF JSON: `chasis_NONE` is the untextured
  * material spanning the whole shell (see the original measurement notes this replaced), the
@@ -101,10 +239,11 @@ private val NissanGtr = CarModel(
     hiddenNativeNodeNames = setOf("Circle", "Circle.001", "Circle.002", "Circle.003"),
     nativeToMeters = 1f,
     baseStats = CarStats(topSpeed = 0.78f, acceleration = 0.84f, handling = 0.80f),
+    body = NissanGtrBody,
     slots = listOf(
         PartSlot(
             id = "wheels",
-            label = "Wheels",
+            label = "Wheels & Rims",
             positions = listOf(
                 Position(x = 1.02f, y = -0.37f, z = -1.64f), // front-right
                 Position(x = -1.04f, y = -0.37f, z = -1.64f), // front-left
@@ -114,6 +253,7 @@ private val NissanGtr = CarModel(
             targetSizeNative = 0.92f,
             options = WheelOptions,
         ),
+        *generatedSlots(NissanGtrBody, nativeToMeters = 1f),
         PartSlot(
             id = "steeringWheel",
             label = "Steering Wheel",
@@ -146,10 +286,11 @@ private val LamborghiniAventador = CarModel(
     ),
     nativeToMeters = 0.01f,
     baseStats = CarStats(topSpeed = 0.90f, acceleration = 0.88f, handling = 0.72f),
+    body = LamborghiniAventadorBody,
     slots = listOf(
         PartSlot(
             id = "wheels",
-            label = "Wheels",
+            label = "Wheels & Rims",
             positions = listOf(
                 Position(x = 65.89f, y = 34.6f, z = 99.44f), // front-right
                 Position(x = -104.97f, y = 34.6f, z = 99.44f), // front-left
@@ -159,6 +300,7 @@ private val LamborghiniAventador = CarModel(
             targetSizeNative = 70f,
             options = WheelOptions,
         ),
+        *generatedSlots(LamborghiniAventadorBody, nativeToMeters = 0.01f),
         PartSlot(
             id = "steeringWheel",
             label = "Steering Wheel",
@@ -221,9 +363,11 @@ fun ModelInstance.applyPaint(bodyMaterialName: String, color: Color) {
 fun SceneScope.CustomizableCar(
     car: CarModel,
     partModelLoader: ModelLoader,
+    materialLoader: MaterialLoader,
     paint: CarPaint,
     selectedOptions: Map<String, PartOption>,
 ) {
+    val partMaterials = rememberPartMaterials(materialLoader, paint)
     // Keyed on the car so switching cars rebuilds every node: ModelNode only applies
     // scaleToUnits when created, so reused part nodes would keep the previous car's sizing
     // (e.g. GT-R wheels sized in metres ending up ~1 cm wide under the Aventador's 0.01 scale).
@@ -248,15 +392,23 @@ fun SceneScope.CustomizableCar(
 
             car.slots.forEach { slot ->
                 val option = selectedOptions[slot.id] ?: slot.options.first()
-                slot.positions.forEach { position ->
-                    val partInstance = rememberModelInstance(partModelLoader, option.assetPath)
-                    partInstance?.let {
-                        ModelNode(
-                            modelInstance = it,
-                            position = position,
-                            centerOrigin = Position(x = 0f, y = 0f, z = 0f),
-                            scaleToUnits = slot.targetSizeNative,
-                        )
+                // Keyed on the option too, so switching e.g. a wing for a ducktail replaces
+                // its nodes instead of reusing mismatched ones.
+                key(slot.id, option.label) {
+                    when (val visual = option.visual) {
+                        is PartVisual.Model -> slot.positions.forEach { position ->
+                            val partInstance = rememberModelInstance(partModelLoader, visual.assetPath)
+                            partInstance?.let {
+                                ModelNode(
+                                    modelInstance = it,
+                                    position = position,
+                                    centerOrigin = Position(x = 0f, y = 0f, z = 0f),
+                                    scaleToUnits = slot.targetSizeNative,
+                                )
+                            }
+                        }
+                        is PartVisual.Generated ->
+                            GeneratedPartNodes(visual.part, car, partMaterials, paint)
                     }
                 }
             }
