@@ -17,11 +17,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
-import com.example.arcarcustomizer.customization.CarCatalog
 import com.example.arcarcustomizer.customization.CustomizableCar
-import com.example.arcarcustomizer.customization.CustomizationControls
-import com.example.arcarcustomizer.customization.DefaultCarPaints
-import com.example.arcarcustomizer.customization.PartOption
+import com.example.arcarcustomizer.customization.CustomizationState
+import com.example.arcarcustomizer.customization.PartPicker
+import com.example.arcarcustomizer.ui.theme.GarageBackButton
 import com.google.ar.core.Anchor
 import com.google.ar.core.HitResult
 import io.github.sceneview.ar.ARSceneView
@@ -36,12 +35,9 @@ import io.github.sceneview.rememberOnGestureListener
  * rotate and drag-reposition, all provided by SceneView's own gesture system.
  */
 @Composable
-fun ArPlacementScreen() {
+fun ArPlacementScreen(state: CustomizationState, onBack: () -> Unit) {
     var anchor by remember { mutableStateOf<Anchor?>(null) }
     var reticleHit by remember { mutableStateOf<HitResult?>(null) }
-    var selectedCar by remember { mutableStateOf(CarCatalog.first()) }
-    var paint by remember { mutableStateOf(DefaultCarPaints.first()) }
-    var selectedOptions by remember { mutableStateOf(mapOf<String, PartOption>()) }
 
     val engine = rememberEngine()
     val modelLoader = rememberModelLoader(engine)
@@ -78,10 +74,10 @@ fun ArPlacementScreen() {
                     // moves, scales and rotates together as one rigid object.
                     Node(isEditable = true) {
                         CustomizableCar(
-                            car = selectedCar,
+                            car = state.car,
                             partModelLoader = modelLoader,
-                            paint = paint,
-                            selectedOptions = selectedOptions,
+                            paint = state.paint,
+                            selectedOptions = state.selectedOptions,
                         )
                     }
                 }
@@ -107,20 +103,13 @@ fun ArPlacementScreen() {
             }
         }
 
-        CustomizationControls(
-            cars = CarCatalog,
-            selectedCar = selectedCar,
-            onCarSelected = { selectedCar = it },
-            paints = DefaultCarPaints,
-            selectedPaint = paint,
-            onPaintSelected = { paint = it },
-            selectedOptions = selectedOptions,
-            onOptionSelected = { slotId, option ->
-                selectedOptions = selectedOptions + (slotId to option)
-            },
+        GarageBackButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(16.dp))
+
+        PartPicker(
+            state = state,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(16.dp),
+                .padding(bottom = 16.dp),
         )
     }
 }

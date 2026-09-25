@@ -11,11 +11,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
-import com.example.arcarcustomizer.customization.CarCatalog
 import com.example.arcarcustomizer.customization.CustomizableCar
-import com.example.arcarcustomizer.customization.CustomizationControls
-import com.example.arcarcustomizer.customization.DefaultCarPaints
-import com.example.arcarcustomizer.customization.PartOption
+import com.example.arcarcustomizer.customization.CustomizationState
+import com.example.arcarcustomizer.customization.PartPicker
+import com.example.arcarcustomizer.ui.theme.GarageBackButton
 import io.github.sceneview.SceneView
 import io.github.sceneview.SurfaceType
 import io.github.sceneview.createEnvironment
@@ -43,10 +42,7 @@ private const val FALLBACK_TOY_SCALE = 0.1f
  * behave the same way in both modes.
  */
 @Composable
-fun FallbackScreen() {
-    var selectedCar by remember { mutableStateOf(CarCatalog.first()) }
-    var paint by remember { mutableStateOf(DefaultCarPaints.first()) }
-    var selectedOptions by remember { mutableStateOf(mapOf<String, PartOption>()) }
+fun FallbackScreen(state: CustomizationState, onBack: () -> Unit) {
     var rigNode by remember { mutableStateOf<NodeImpl?>(null) }
 
     val engine = rememberEngine()
@@ -86,10 +82,10 @@ fun FallbackScreen() {
                     apply = { rigNode = this },
                 ) {
                     CustomizableCar(
-                        car = selectedCar,
+                        car = state.car,
                         partModelLoader = modelLoader,
-                        paint = paint,
-                        selectedOptions = selectedOptions,
+                        paint = state.paint,
+                        selectedOptions = state.selectedOptions,
                     )
                 }
 
@@ -102,20 +98,13 @@ fun FallbackScreen() {
                 )
             }
 
-            CustomizationControls(
-                cars = CarCatalog,
-                selectedCar = selectedCar,
-                onCarSelected = { selectedCar = it },
-                paints = DefaultCarPaints,
-                selectedPaint = paint,
-                onPaintSelected = { paint = it },
-                selectedOptions = selectedOptions,
-                onOptionSelected = { slotId, option ->
-                    selectedOptions = selectedOptions + (slotId to option)
-                },
+            GarageBackButton(onClick = onBack, modifier = Modifier.align(Alignment.TopStart).padding(16.dp))
+
+            PartPicker(
+                state = state,
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
-                    .padding(16.dp),
+                    .padding(bottom = 16.dp),
             )
         }
     }

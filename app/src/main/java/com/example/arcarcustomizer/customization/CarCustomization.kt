@@ -1,25 +1,8 @@
 package com.example.arcarcustomizer.customization
 
-import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.unit.dp
 import io.github.sceneview.SceneScope
 import io.github.sceneview.loaders.ModelLoader
 import io.github.sceneview.math.Position
@@ -31,7 +14,27 @@ import io.github.sceneview.rememberModelInstance
  * One selectable part model for a [PartSlot] (a specific tire, rim, steering wheel, headlight,
  * etc.).
  */
-data class PartOption(val label: String, val assetPath: String)
+data class PartOption(
+    val label: String,
+    val assetPath: String,
+    val statDelta: CarStats = CarStats.Zero,
+)
+
+/**
+ * Garage performance read-out, each stat on a 0..1 scale. These are illustrative game-style
+ * values, not measured figures — tune them freely.
+ */
+data class CarStats(val topSpeed: Float, val acceleration: Float, val handling: Float) {
+    operator fun plus(other: CarStats) = CarStats(
+        topSpeed + other.topSpeed,
+        acceleration + other.acceleration,
+        handling + other.handling,
+    )
+
+    companion object {
+        val Zero = CarStats(0f, 0f, 0f)
+    }
+}
 
 /**
  * A customizable slot on a car — e.g. "wheels" (4 positions) or "steering wheel" (1 position).
@@ -62,6 +65,7 @@ data class CarModel(
     val bodyMaterialName: String,
     val hiddenNativeNodeNames: Set<String>,
     val nativeToMeters: Float,
+    val baseStats: CarStats,
     val slots: List<PartSlot>,
 )
 
@@ -73,8 +77,8 @@ data class CarModel(
  */
 private val WheelOptions = listOf(
     PartOption("Hubcap", "models/wheels_hubcap.glb"),
-    PartOption("Tire", "models/wheels_tire.glb"),
-    PartOption("Vehicle Tire", "models/wheels_vehicle_tire.glb"),
+    PartOption("Tire", "models/wheels_tire.glb", CarStats(0f, 0.03f, 0.06f)),
+    PartOption("Vehicle Tire", "models/wheels_vehicle_tire.glb", CarStats(0.02f, 0f, 0.03f)),
 )
 
 private val SteeringWheelOptions = listOf(
@@ -94,6 +98,7 @@ private val NissanGtr = CarModel(
     bodyMaterialName = "chasis_NONE",
     hiddenNativeNodeNames = setOf("Circle", "Circle.001", "Circle.002", "Circle.003"),
     nativeToMeters = 1f,
+    baseStats = CarStats(topSpeed = 0.78f, acceleration = 0.84f, handling = 0.80f),
     slots = listOf(
         PartSlot(
             id = "wheels",
@@ -138,6 +143,7 @@ private val LamborghiniAventador = CarModel(
         "Lamborghini_Aventador_Wheel_RR",
     ),
     nativeToMeters = 0.01f,
+    baseStats = CarStats(topSpeed = 0.90f, acceleration = 0.88f, handling = 0.72f),
     slots = listOf(
         PartSlot(
             id = "wheels",
@@ -172,6 +178,10 @@ val DefaultCarPaints = listOf(
     CarPaint("Blue", Color(0xFF1565C0)),
     CarPaint("Black", Color(0xFF212121)),
     CarPaint("White", Color(0xFFFAFAFA)),
+    CarPaint("Midnight Purple", Color(0xFF4A148C)),
+    CarPaint("Lime", Color(0xFF76FF03)),
+    CarPaint("Sunset Orange", Color(0xFFFF6D00)),
+    CarPaint("Gunmetal", Color(0xFF546E7A)),
 )
 
 /**
@@ -239,94 +249,6 @@ fun SceneScope.CustomizableCar(
                     )
                 }
             }
-        }
-    }
-}
-
-/**
- * Car picker, paint swatches, and one row per the selected car's [PartSlot]s — shared by both
- * modes. A plain Compose overlay: it draws over whatever 3D content is behind it, AR or
- * Fallback alike.
- */
-@Composable
-fun CustomizationControls(
-    cars: List<CarModel>,
-    selectedCar: CarModel,
-    onCarSelected: (CarModel) -> Unit,
-    paints: List<CarPaint>,
-    selectedPaint: CarPaint,
-    onPaintSelected: (CarPaint) -> Unit,
-    selectedOptions: Map<String, PartOption>,
-    onOptionSelected: (slotId: String, option: PartOption) -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(16.dp))
-            .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        LabeledChipRow(
-            options = cars,
-            optionLabel = { it.label },
-            isSelected = { it.id == selectedCar.id },
-            onSelected = onCarSelected,
-        )
-
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            paints.forEach { paint ->
-                val selected = paint == selectedPaint
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(paint.color)
-                        .border(
-                            width = if (selected) 3.dp else 1.dp,
-                            color = Color.White,
-                            shape = CircleShape,
-                        )
-                        .clickable { onPaintSelected(paint) }
-                )
-            }
-        }
-
-        selectedCar.slots.forEach { slot ->
-            Column {
-                Text(slot.label, color = Color.White.copy(alpha = 0.7f))
-                LabeledChipRow(
-                    options = slot.options,
-                    optionLabel = { it.label },
-                    isSelected = { (selectedOptions[slot.id] ?: slot.options.first()) == it },
-                    onSelected = { onOptionSelected(slot.id, it) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun <T> LabeledChipRow(
-    options: List<T>,
-    optionLabel: (T) -> String,
-    isSelected: (T) -> Boolean,
-    onSelected: (T) -> Unit,
-) {
-    Row(
-        modifier = Modifier.horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        options.forEach { option ->
-            val selected = isSelected(option)
-            Text(
-                text = optionLabel(option),
-                color = Color.White,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(if (selected) Color.White.copy(alpha = 0.25f) else Color.Transparent)
-                    .clickable { onSelected(option) }
-                    .padding(horizontal = 10.dp, vertical = 6.dp)
-            )
         }
     }
 }
