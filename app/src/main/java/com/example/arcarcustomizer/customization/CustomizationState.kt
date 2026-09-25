@@ -96,7 +96,7 @@ data class CarFootprint(
 
 val CarModel.footprint: CarFootprint
     get() {
-        // Only slots whose positions are real part locations (wheels, steering wheel); the
+        // Only slots whose positions are real part locations (the wheels); the
         // others' positions are camera aims.
         val modelSlots = slots.filter { it.positionsAreGeometry }
         val points = modelSlots.flatMap { it.positions }.map { it * nativeToMeters }

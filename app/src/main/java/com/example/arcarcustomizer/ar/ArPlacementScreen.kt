@@ -72,7 +72,7 @@ fun ArPlacementScreen(state: CustomizationState, onBack: () -> Unit) {
             val currentAnchor = anchor
             if (currentAnchor != null) {
                 AnchorNode(anchor = currentAnchor) {
-                    // A single editable rig so the whole car (body, wheels, steering wheel)
+                    // A single editable rig so the whole car (body, wheels, fitted parts)
                     // moves, scales and rotates together as one rigid object.
                     Node(isEditable = true) {
                         CustomizableCar(

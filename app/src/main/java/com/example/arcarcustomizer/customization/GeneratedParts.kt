@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import com.example.arcarcustomizer.ui.theme.GarageColors
+import com.google.android.filament.LightManager
 import com.google.android.filament.MaterialInstance
 import io.github.sceneview.SceneScope
 import io.github.sceneview.loaders.MaterialLoader
@@ -74,10 +75,37 @@ enum class GeneratedPart {
     WheelFiveSpoke,
     WheelMesh,
     WheelDeepDish,
+    SwanNeck,
+    TwinDeck,
+    WidebodyKit,
+    RallyKit,
+    TimeAttackKit,
+    Flames,
+    CheckerFade,
+    HeadXenon,
+    HeadIce,
+    HeadGold,
+    HeadViolet,
+    TailLed,
+    TailSmoked,
+    TailBar,
+    TailEmber,
+    GlowCyan,
+    GlowMagenta,
+    GlowLime,
+    GlowViolet,
 }
 
+/**
+ * One light lens on the car, in native units: [center] sits on the lens surface (ray-cast from
+ * the .glb), facing +z for headlights and -z for tail lights.
+ */
+data class LightPanel(val center: Position, val width: Float, val height: Float, val round: Boolean = false)
+
+data class CarLights(val head: List<LightPanel>, val tail: List<LightPanel>)
+
 /** Shared materials for generated parts; [bodyColor] tracks the current paint. */
-class PartMaterials(materialLoader: MaterialLoader) {
+class PartMaterials(private val materialLoader: MaterialLoader) {
     val carbon: MaterialInstance =
         materialLoader.createColorInstance(Color(0xFF141416), metallic = 0.2f, roughness = 0.35f)
     val bodyColor: MaterialInstance =
@@ -96,6 +124,12 @@ class PartMaterials(materialLoader: MaterialLoader) {
         materialLoader.createColorInstance(Color(0xFFD4A640), metallic = 1f, roughness = 0.3f)
     val gloss: MaterialInstance =
         materialLoader.createColorInstance(Color(0xFF1C1C20), metallic = 0.6f, roughness = 0.25f)
+
+    private val unlitCache = mutableMapOf<Color, MaterialInstance>()
+
+    /** Flat, full-brightness colour that ignores scene lighting — reads as a glowing lamp. */
+    fun glow(color: Color): MaterialInstance =
+        unlitCache.getOrPut(color) { materialLoader.createUnlitColorInstance(color) }
 
     fun matchPaint(paint: CarPaint) = bodyColor.setColor(colorOf(paint.color))
 
@@ -143,11 +177,33 @@ fun SceneScope.GeneratedPartNodes(
             )
         }
         GeneratedPart.GtWing -> GtWing(body, u, materials)
-        GeneratedPart.StreetKit -> BodyKit(body, u, materials, track = false)
-        GeneratedPart.TrackKit -> BodyKit(body, u, materials, track = true)
+        GeneratedPart.SwanNeck -> SwanNeckWing(body, u, materials)
+        GeneratedPart.TwinDeck -> TwinDeckWing(body, u, materials)
+        GeneratedPart.StreetKit -> BodyKit(body, u, materials, level = 1)
+        GeneratedPart.TrackKit -> BodyKit(body, u, materials, level = 2)
+        GeneratedPart.TimeAttackKit -> BodyKit(body, u, materials, level = 3)
+        GeneratedPart.WidebodyKit -> {
+            BodyKit(body, u, materials, level = 1)
+            FenderFlares(car, u, materials)
+        }
+        GeneratedPart.RallyKit -> RallyKit(car, u, materials)
         GeneratedPart.RacingStripes -> RacingStripes(body, u, materials.contrastFor(paint))
         GeneratedPart.RaceNumber -> DoorDecals(body, u, widthM = 0.5f, heightM = 0.5f, bitmap = remember { raceNumberBitmap("27") })
         GeneratedPart.SideLivery -> DoorDecals(body, u, widthM = 1.5f, heightM = 0.375f, bitmap = remember { liveryBitmap() })
+        GeneratedPart.Flames -> DoorDecals(body, u, widthM = 1.6f, heightM = 0.45f, bitmap = remember { flamesBitmap() })
+        GeneratedPart.CheckerFade -> DoorDecals(body, u, widthM = 1.6f, heightM = 0.4f, bitmap = remember { checkerBitmap() })
+        GeneratedPart.HeadXenon -> Headlights(car, u, materials, Color(0xFFF4F8FF))
+        GeneratedPart.HeadIce -> Headlights(car, u, materials, Color(0xFF7FD8FF))
+        GeneratedPart.HeadGold -> Headlights(car, u, materials, Color(0xFFFFC94A))
+        GeneratedPart.HeadViolet -> Headlights(car, u, materials, Color(0xFFB57BFF))
+        GeneratedPart.TailLed -> TailLights(car, u, materials.glow(Color(0xFFFF1A1A)), glowColor = Color(0xFFFF1A1A), bar = false)
+        GeneratedPart.TailSmoked -> TailLights(car, u, materials.gloss, glowColor = null, bar = false)
+        GeneratedPart.TailBar -> TailLights(car, u, materials.glow(Color(0xFFFF1A1A)), glowColor = Color(0xFFFF1A1A), bar = true)
+        GeneratedPart.TailEmber -> TailLights(car, u, materials.glow(Color(0xFFFF6A00)), glowColor = Color(0xFFFF6A00), bar = false)
+        GeneratedPart.GlowCyan -> Underglow(car, u, materials, Color(0xFF00E5FF))
+        GeneratedPart.GlowMagenta -> Underglow(car, u, materials, Color(0xFFFF2E88))
+        GeneratedPart.GlowLime -> Underglow(car, u, materials, Color(0xFF76FF03))
+        GeneratedPart.GlowViolet -> Underglow(car, u, materials, Color(0xFF9D4DFF))
         GeneratedPart.WheelFiveSpoke,
         GeneratedPart.WheelMesh,
         GeneratedPart.WheelDeepDish -> slot.positions.forEach { position ->
@@ -192,33 +248,51 @@ private fun SceneScope.GtWing(body: BodyAnchors, u: Float, materials: PartMateri
     }
 }
 
+/**
+ * Aero kit in three levels: 1 = street (splitter + body-colour skirts), 2 = track (deeper
+ * splitter, canards, diffuser), 3 = time attack (everything bigger, carbon skirts, more strakes).
+ */
 @Composable
-private fun SceneScope.BodyKit(body: BodyAnchors, u: Float, materials: PartMaterials, track: Boolean) {
-    val splitterDepth = (if (track) 0.26f else 0.16f) * u
-    val protrude = (if (track) 0.12f else 0.06f) * u
+private fun SceneScope.BodyKit(body: BodyAnchors, u: Float, materials: PartMaterials, level: Int) {
+    val splitterDepth = when (level) { 1 -> 0.16f; 2 -> 0.26f; else -> 0.42f } * u
+    val protrude = when (level) { 1 -> 0.06f; 2 -> 0.12f; else -> 0.22f } * u
+    val splitterWidth = body.sillHalfWidth * if (level == 3) 1.95f else 1.64f
     // Front splitter under the nose.
     CubeNode(
-        size = Size(body.sillHalfWidth * 1.64f, 0.025f * u, splitterDepth),
+        size = Size(splitterWidth, 0.025f * u, splitterDepth),
         materialInstance = materials.carbon,
         position = Position(body.centerX, body.noseBottomY + 0.012f * u, body.frontZ + protrude - splitterDepth / 2f),
     )
-    // Body-coloured side skirts along the sills.
+    if (level == 3) {
+        // Splitter support rods.
+        for (side in listOf(-1f, 1f)) {
+            CubeNode(
+                size = Size(0.015f * u, 0.22f * u, 0.015f * u),
+                materialInstance = materials.silver,
+                position = Position(body.centerX + side * splitterWidth * 0.3f, body.noseBottomY + 0.12f * u, body.frontZ + protrude * 0.6f),
+                rotation = Rotation(x = -25f),
+            )
+        }
+    }
+    // Side skirts along the sills: body colour for street/track, taller carbon for time attack.
     val skirtLength = body.skirtZ.endInclusive - body.skirtZ.start
     val skirtZ = (body.skirtZ.start + body.skirtZ.endInclusive) / 2f
+    val skirtHeight = (if (level == 3) 0.14f else 0.09f) * u
     for (side in listOf(-1f, 1f)) {
         CubeNode(
-            size = Size(0.05f * u, 0.09f * u, skirtLength),
-            materialInstance = materials.bodyColor,
+            size = Size(0.05f * u, skirtHeight, skirtLength),
+            materialInstance = if (level == 3) materials.carbon else materials.bodyColor,
             position = Position(body.centerX + side * (body.sillHalfWidth + 0.01f * u), body.sillY + 0.03f * u, skirtZ),
         )
     }
-    if (!track) return
+    if (level == 1) return
 
-    // Canards on the nose corners, two per side.
+    // Canards on the nose corners.
+    val canardRows = if (level == 3) listOf(0.12f, 0.22f, 0.32f) else listOf(0.14f, 0.26f)
     for (side in listOf(-1f, 1f)) {
-        for ((i, height) in listOf(0.14f, 0.26f).withIndex()) {
+        for ((i, height) in canardRows.withIndex()) {
             CubeNode(
-                size = Size(0.22f * u, 0.012f * u, 0.14f * u),
+                size = Size((if (level == 3) 0.3f else 0.22f) * u, 0.012f * u, 0.14f * u),
                 materialInstance = materials.carbon,
                 position = Position(
                     body.centerX + side * body.sillHalfWidth * 0.86f,
@@ -230,21 +304,242 @@ private fun SceneScope.BodyKit(body: BodyAnchors, u: Float, materials: PartMater
         }
     }
     // Rear diffuser: an upswept floor with vertical strakes.
-    val diffuserWidth = body.sillHalfWidth * 1.3f
+    val diffuserWidth = body.sillHalfWidth * if (level == 3) 1.6f else 1.3f
+    val diffuserDepth = (if (level == 3) 0.5f else 0.36f) * u
+    val strakes = if (level == 3) 4 else 2
     CubeNode(
-        size = Size(diffuserWidth, 0.02f * u, 0.36f * u),
+        size = Size(diffuserWidth, 0.02f * u, diffuserDepth),
         materialInstance = materials.carbon,
         position = Position(body.centerX, body.tailBottomY - 0.01f * u, body.rearZ + 0.14f * u),
         rotation = Rotation(x = 10f),
     )
-    for (i in -2..2) {
+    for (i in -strakes..strakes) {
         CubeNode(
-            size = Size(0.015f * u, 0.13f * u, 0.32f * u),
+            size = Size(0.015f * u, 0.13f * u, diffuserDepth * 0.9f),
             materialInstance = materials.carbon,
-            position = Position(body.centerX + i * diffuserWidth / 5f, body.tailBottomY - 0.06f * u, body.rearZ + 0.14f * u),
+            position = Position(body.centerX + i * diffuserWidth / (2 * strakes + 1), body.tailBottomY - 0.06f * u, body.rearZ + 0.14f * u),
             rotation = Rotation(x = 10f),
         )
     }
+}
+
+/** The car's wheel slot, which wheel-relative parts (flares, mud flaps, underglow) fit to. */
+private val CarModel.wheelSlot get() = slots.first { it.id == "wheels" }
+
+/** Body-colour arches bolted over each wheel, three segments per arch. */
+@Composable
+private fun SceneScope.FenderFlares(car: CarModel, u: Float, materials: PartMaterials) {
+    val body = car.body
+    val wheels = car.wheelSlot
+    val r = wheels.targetSizeNative / 2f
+    for (p in wheels.positions) {
+        val side = if (p.x >= body.centerX) 1f else -1f
+        val x = body.centerX + side * (body.sillHalfWidth + 0.03f * u)
+        CubeNode(
+            size = Size(0.1f * u, 0.06f * u, r * 1.1f),
+            materialInstance = materials.bodyColor,
+            position = Position(x, p.y + r * 1.08f, p.z),
+        )
+        for (end in listOf(-1f, 1f)) {
+            CubeNode(
+                size = Size(0.1f * u, 0.06f * u, r * 0.8f),
+                materialInstance = materials.bodyColor,
+                position = Position(x, p.y + r * 0.7f, p.z + end * r * 0.88f),
+                // Tip each end down and away from the arch top.
+                rotation = Rotation(x = end * 50f),
+            )
+        }
+    }
+}
+
+/** Rally pack: mud flaps behind every wheel, a silver skid plate, and a roof light pod. */
+@Composable
+private fun SceneScope.RallyKit(car: CarModel, u: Float, materials: PartMaterials) {
+    val body = car.body
+    val wheels = car.wheelSlot
+    val r = wheels.targetSizeNative / 2f
+    for (p in wheels.positions) {
+        CubeNode(
+            size = Size(0.28f * u, 0.3f * u, 0.015f * u),
+            materialInstance = materials.black,
+            position = Position(p.x, p.y - r + 0.03f * u + 0.15f * u, p.z - r - 0.06f * u),
+        )
+    }
+    CubeNode(
+        size = Size(body.sillHalfWidth * 1.2f, 0.02f * u, 0.45f * u),
+        materialInstance = materials.silver,
+        position = Position(body.centerX, body.noseBottomY - 0.01f * u, body.frontZ - 0.2f * u),
+        rotation = Rotation(x = -12f),
+    )
+    // Light pod on the front edge of the roof.
+    val roofY = body.topProfile.maxOf { it.second }
+    val roofFrontZ = body.topProfile.filter { it.second >= roofY - 0.02f * u }.maxOf { it.first }
+    val podWidth = body.sillHalfWidth * 1.1f
+    CubeNode(
+        size = Size(podWidth, 0.06f * u, 0.08f * u),
+        materialInstance = materials.carbon,
+        position = Position(body.centerX, roofY + 0.09f * u, roofFrontZ - 0.1f * u),
+    )
+    for (i in 0 until 4) {
+        CylinderNode(
+            radius = 0.06f * u,
+            height = 0.03f * u,
+            materialInstance = materials.glow(Color(0xFFFFF4D6)),
+            position = Position(body.centerX + (i - 1.5f) * podWidth / 4f, roofY + 0.09f * u, roofFrontZ - 0.05f * u),
+            rotation = Rotation(x = 90f),
+        )
+    }
+}
+
+@Composable
+private fun SceneScope.SwanNeckWing(body: BodyAnchors, u: Float, materials: PartMaterials) {
+    val span = minOf(body.sillHalfWidth * 1.9f, 1.9f * u)
+    val wingY = body.deckY + 0.5f * u
+    CubeNode(
+        size = Size(span, 0.035f * u, 0.3f * u),
+        materialInstance = materials.carbon,
+        position = Position(body.centerX, wingY, body.wingZ),
+        rotation = Rotation(x = -6f),
+    )
+    for (side in listOf(-1f, 1f)) {
+        CubeNode(
+            size = Size(0.012f * u, 0.18f * u, 0.36f * u),
+            materialInstance = materials.carbon,
+            position = Position(body.centerX + side * span / 2f, wingY, body.wingZ),
+        )
+        // Uprights rise behind the wing and hook over its top, so the underside stays clean.
+        val x = body.centerX + side * span * 0.28f
+        CubeNode(
+            size = Size(0.02f * u, 0.56f * u, 0.05f * u),
+            materialInstance = materials.silver,
+            position = Position(x, body.deckY + 0.28f * u, body.wingZ - 0.17f * u),
+        )
+        CubeNode(
+            size = Size(0.02f * u, 0.04f * u, 0.18f * u),
+            materialInstance = materials.silver,
+            position = Position(x, wingY + 0.05f * u, body.wingZ - 0.09f * u),
+        )
+    }
+}
+
+@Composable
+private fun SceneScope.TwinDeckWing(body: BodyAnchors, u: Float, materials: PartMaterials) {
+    val span = minOf(body.sillHalfWidth * 1.8f, 1.8f * u)
+    for ((i, height) in listOf(0.3f, 0.5f).withIndex()) {
+        CubeNode(
+            size = Size(span, 0.03f * u, 0.26f * u),
+            materialInstance = if (i == 0) materials.bodyColor else materials.carbon,
+            position = Position(body.centerX, body.deckY + height * u, body.wingZ - i * 0.05f * u),
+            rotation = Rotation(x = -10f),
+        )
+    }
+    for (side in listOf(-1f, 1f)) {
+        CubeNode(
+            size = Size(0.014f * u, 0.36f * u, 0.4f * u),
+            materialInstance = materials.carbon,
+            position = Position(body.centerX + side * span / 2f, body.deckY + 0.4f * u, body.wingZ - 0.02f * u),
+        )
+        CubeNode(
+            size = Size(0.02f * u, 0.3f * u, 0.1f * u),
+            materialInstance = materials.carbon,
+            position = Position(body.centerX + side * span * 0.3f, body.deckY + 0.15f * u, body.wingZ + 0.03f * u),
+        )
+    }
+}
+
+/** A lens-shaped glowing panel (or disc, for round lamps) sitting just proud of [panel]. */
+@Composable
+private fun SceneScope.LampLens(panel: LightPanel, facing: Float, u: Float, material: MaterialInstance) {
+    val depth = 0.012f * u
+    val center = Position(panel.center.x, panel.center.y, panel.center.z + facing * depth / 2f)
+    if (panel.round) {
+        CylinderNode(
+            radius = panel.width / 2f,
+            height = depth,
+            materialInstance = material,
+            position = center,
+            rotation = Rotation(x = 90f),
+        )
+    } else {
+        CubeNode(size = Size(panel.width, panel.height, depth), materialInstance = material, position = center)
+    }
+}
+
+/** Glowing headlight lenses plus a soft light thrown onto the floor ahead of the car. */
+@Composable
+private fun SceneScope.Headlights(car: CarModel, u: Float, materials: PartMaterials, color: Color) {
+    val lens = materials.glow(color)
+    car.lights.head.forEach { LampLens(it, facing = 1f, u = u, material = lens) }
+    GlowLight(
+        color = color,
+        position = Position(car.body.centerX, car.lights.head.map { it.center.y }.average().toFloat(), car.body.frontZ + 0.7f * u),
+        falloffM = 3f,
+    )
+}
+
+@Composable
+private fun SceneScope.TailLights(car: CarModel, u: Float, lens: MaterialInstance, glowColor: Color?, bar: Boolean) {
+    val tails = car.lights.tail
+    tails.forEach { LampLens(it, facing = -1f, u = u, material = lens) }
+    if (bar) {
+        // Full-width LED strip joining the two lamps.
+        val minX = tails.minOf { it.center.x - it.width / 2f }
+        val maxX = tails.maxOf { it.center.x + it.width / 2f }
+        val y = tails.map { it.center.y }.average().toFloat()
+        val z = tails.maxOf { it.center.z } - 0.008f * u
+        CubeNode(
+            size = Size(maxX - minX, 0.025f * u, 0.012f * u),
+            materialInstance = lens,
+            position = Position((minX + maxX) / 2f, y, z),
+        )
+    }
+    if (glowColor != null) {
+        GlowLight(
+            color = glowColor,
+            position = Position(car.body.centerX, tails.map { it.center.y }.average().toFloat(), car.body.rearZ - 0.5f * u),
+            falloffM = 2f,
+        )
+    }
+}
+
+/** Neon tubes along the underside plus coloured light pooling on the floor beneath the car. */
+@Composable
+private fun SceneScope.Underglow(car: CarModel, u: Float, materials: PartMaterials, color: Color) {
+    val body = car.body
+    val tube = materials.glow(color)
+    val wheels = car.wheelSlot
+    val floorY = wheels.positions.minOf { it.y } - wheels.targetSizeNative / 2f
+    val length = (body.frontZ - body.rearZ) * 0.7f
+    val midZ = (body.frontZ + body.rearZ) / 2f
+    for (side in listOf(-1f, 1f)) {
+        CubeNode(
+            size = Size(0.03f * u, 0.02f * u, length),
+            materialInstance = tube,
+            position = Position(body.centerX + side * (body.sillHalfWidth - 0.08f * u), body.sillY - 0.015f * u, midZ),
+        )
+    }
+    for (z in listOf(body.frontZ - 0.35f * u, body.rearZ + 0.35f * u)) {
+        CubeNode(
+            size = Size(body.sillHalfWidth * 1.5f, 0.02f * u, 0.03f * u),
+            materialInstance = tube,
+            position = Position(body.centerX, minOf(body.noseBottomY, body.tailBottomY) - 0.01f * u, z),
+        )
+    }
+    for (z in listOf(body.rearZ + 0.2f * (body.frontZ - body.rearZ), midZ, body.frontZ - 0.2f * (body.frontZ - body.rearZ))) {
+        GlowLight(color = color, position = Position(body.centerX, (floorY + body.sillY) / 2f, z), falloffM = 1.8f)
+    }
+}
+
+/** A coloured point light; intensity is in lumens, and [falloffM] is in real metres. */
+@Composable
+private fun SceneScope.GlowLight(color: Color, position: Position, falloffM: Float) {
+    LightNode(
+        type = LightManager.Type.POINT,
+        intensity = 400_000f,
+        position = position,
+        color = colorOf(color),
+        apply = { falloff(falloffM) },
+    )
 }
 
 /**
@@ -354,10 +649,12 @@ private data class WheelStyle(
 /** The same decal image on both doors, rotated (not mirrored) so it reads correctly on each side. */
 @Composable
 private fun SceneScope.DoorDecals(body: BodyAnchors, u: Float, widthM: Float, heightM: Float, bitmap: Bitmap) {
+    // Shrink (keeping the aspect ratio) to fit between the wheel arches on shorter cars.
+    val fit = minOf(1f, (body.skirtZ.endInclusive - body.skirtZ.start) * 1.25f / (widthM * u))
     for (side in listOf(-1f, 1f)) {
         ImageNode(
             bitmap = bitmap,
-            size = Size(widthM * u, heightM * u, 0f),
+            size = Size(widthM * u * fit, heightM * u * fit, 0f),
             position = Position(body.centerX + side * (body.doorSideHalfWidth + 0.012f * u), body.doorY, body.doorZ),
             rotation = Rotation(y = side * 90f),
         )
@@ -413,5 +710,59 @@ private fun liveryBitmap(): Bitmap {
     // Thin pinstripe trailing off the last slash.
     paint.color = android.graphics.Color.WHITE
     canvas.drawRect(0.68f * w, h * 0.78f, w.toFloat(), h * 0.84f, paint)
+    return bitmap
+}
+
+/** Flame licks running from the front of the door back, yellow core to red tips. */
+private fun flamesBitmap(): Bitmap {
+    val w = 1024
+    val h = 288
+    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint(Paint.ANTI_ALIAS_FLAG)
+    val tongues = listOf(0.18f to 0.95f, 0.36f to 0.7f, 0.55f to 0.85f, 0.72f to 0.6f, 0.86f to 0.75f)
+    val layers = listOf(
+        android.graphics.Color.rgb(214, 32, 20) to 1f,
+        android.graphics.Color.rgb(255, 120, 0) to 0.78f,
+        android.graphics.Color.rgb(255, 214, 64) to 0.52f,
+    )
+    for ((color, scale) in layers) {
+        paint.color = color
+        val path = Path()
+        path.moveTo(0f, h * (0.5f - 0.42f * scale))
+        for ((y, reach) in tongues) {
+            val tipX = w * reach * scale
+            val tipY = h * y
+            path.quadTo(tipX * 0.55f, tipY - h * 0.2f * scale, tipX, tipY - h * 0.06f)
+            path.quadTo(tipX * 0.5f, tipY + h * 0.02f, w * 0.08f, tipY + h * 0.06f)
+        }
+        path.lineTo(0f, h * (0.5f + 0.42f * scale))
+        path.close()
+        canvas.drawPath(path, paint)
+    }
+    return bitmap
+}
+
+/** A checkerboard band that breaks up and fades out towards the rear. */
+private fun checkerBitmap(): Bitmap {
+    val w = 1024
+    val h = 256
+    val cell = 32
+    val bitmap = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888)
+    val canvas = Canvas(bitmap)
+    val paint = Paint()
+    for (cx in 0 until w / cell) {
+        val fade = 1f - cx.toFloat() / (w / cell)
+        for (cy in 0 until h / cell) {
+            // Drop more squares the further back we go, for a dissolving edge.
+            if (((cx * 7 + cy * 13) % 10) / 10f > fade * 1.3f) continue
+            paint.color = if ((cx + cy) % 2 == 0) android.graphics.Color.BLACK else android.graphics.Color.WHITE
+            paint.alpha = (255 * fade.coerceIn(0.25f, 1f)).toInt()
+            canvas.drawRect(
+                (cx * cell).toFloat(), (cy * cell).toFloat(),
+                ((cx + 1) * cell).toFloat(), ((cy + 1) * cell).toFloat(), paint,
+            )
+        }
+    }
     return bitmap
 }

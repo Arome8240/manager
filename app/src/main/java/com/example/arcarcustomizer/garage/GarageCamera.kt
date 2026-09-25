@@ -63,7 +63,7 @@ fun cameraShotFor(car: CarModel, category: CustomizationCategory): CameraShot {
                 dx / (footprint.halfExtentX * footprint.halfExtentX),
                 dz / (footprint.halfExtentZ * footprint.halfExtentZ),
             )
-            // Parts well inside the bodywork (a steering wheel) get a high, wider shot looking
+            // Parts well inside the bodywork (e.g. cabin parts) get a high, wider shot looking
             // down in through the glass instead of a close-up that would sit inside the body.
             val isInterior = fromCenter < edge * 0.6f
             val partRadius = max(slot.targetSizeNative * car.nativeToMeters * 1.4f, 0.45f)
