@@ -71,6 +71,9 @@ enum class GeneratedPart {
     RacingStripes,
     RaceNumber,
     SideLivery,
+    WheelFiveSpoke,
+    WheelMesh,
+    WheelDeepDish,
 }
 
 /** Shared materials for generated parts; [bodyColor] tracks the current paint. */
@@ -83,6 +86,16 @@ class PartMaterials(materialLoader: MaterialLoader) {
         materialLoader.createColorInstance(Color(0xFFF2F2F2), metallic = 0f, roughness = 0.4f)
     val black: MaterialInstance =
         materialLoader.createColorInstance(Color(0xFF101010), metallic = 0f, roughness = 0.4f)
+    val rubber: MaterialInstance =
+        materialLoader.createColorInstance(Color(0xFF1B1B1D), metallic = 0f, roughness = 0.9f)
+    val wheelWell: MaterialInstance =
+        materialLoader.createColorInstance(Color(0xFF0B0B0C), metallic = 0f, roughness = 0.8f)
+    val silver: MaterialInstance =
+        materialLoader.createColorInstance(Color(0xFFD9DCE0), metallic = 1f, roughness = 0.22f)
+    val gold: MaterialInstance =
+        materialLoader.createColorInstance(Color(0xFFD4A640), metallic = 1f, roughness = 0.3f)
+    val gloss: MaterialInstance =
+        materialLoader.createColorInstance(Color(0xFF1C1C20), metallic = 0.6f, roughness = 0.25f)
 
     fun matchPaint(paint: CarPaint) = bodyColor.setColor(colorOf(paint.color))
 
@@ -105,6 +118,7 @@ fun rememberPartMaterials(materialLoader: MaterialLoader, paint: CarPaint): Part
 fun SceneScope.GeneratedPartNodes(
     part: GeneratedPart,
     car: CarModel,
+    slot: PartSlot,
     materials: PartMaterials,
     paint: CarPaint,
 ) {
@@ -134,6 +148,13 @@ fun SceneScope.GeneratedPartNodes(
         GeneratedPart.RacingStripes -> RacingStripes(body, u, materials.contrastFor(paint))
         GeneratedPart.RaceNumber -> DoorDecals(body, u, widthM = 0.5f, heightM = 0.5f, bitmap = remember { raceNumberBitmap("27") })
         GeneratedPart.SideLivery -> DoorDecals(body, u, widthM = 1.5f, heightM = 0.375f, bitmap = remember { liveryBitmap() })
+        GeneratedPart.WheelFiveSpoke,
+        GeneratedPart.WheelMesh,
+        GeneratedPart.WheelDeepDish -> slot.positions.forEach { position ->
+            // Each wheel's rim face goes on the side facing away from the car.
+            val outward = if (position.x >= body.centerX) 1f else -1f
+            Wheel(part, position, diameter = slot.targetSizeNative, outward = outward, materials = materials)
+        }
     }
 }
 
@@ -253,6 +274,82 @@ private fun SceneScope.RacingStripes(body: BodyAnchors, u: Float, material: Mate
         }
     }
 }
+
+/**
+ * A wheel built from primitives: a rubber tyre, a dark rim well on the outer face, and the
+ * design's spokes and lip on top of it. [diameter] is in native units; the axle runs along x.
+ */
+@Composable
+private fun SceneScope.Wheel(
+    part: GeneratedPart,
+    center: Position,
+    diameter: Float,
+    outward: Float,
+    materials: PartMaterials,
+) {
+    val r = diameter / 2f
+    val width = diameter * 0.3f
+    val face = center.x + outward * (width / 2f)
+    val axleAlongX = Rotation(z = 90f)
+    val (rimRadius, spokeCount, spokeWidth, metal) = when (part) {
+        GeneratedPart.WheelFiveSpoke -> WheelStyle(0.70f * r, 5, 0.16f * r, materials.silver)
+        GeneratedPart.WheelMesh -> WheelStyle(0.70f * r, 10, 0.045f * r, materials.gold)
+        else -> WheelStyle(0.74f * r, 6, 0.13f * r, materials.gloss)
+    }
+
+    CylinderNode(radius = r, height = width, materialInstance = materials.rubber, position = center, rotation = axleAlongX)
+    CylinderNode(
+        radius = rimRadius,
+        height = diameter * 0.01f,
+        materialInstance = materials.wheelWell,
+        position = Position(face + outward * diameter * 0.005f, center.y, center.z),
+        rotation = axleAlongX,
+    )
+
+    val spokeX = face + outward * diameter * 0.018f
+    val hubRadius = 0.16f * r
+    val spokeLength = rimRadius - hubRadius * 0.6f
+    val midRadius = hubRadius * 0.6f + spokeLength / 2f
+    // Mesh: a second, cross-laced set of spokes skewed the other way.
+    val skews = if (part == GeneratedPart.WheelMesh) listOf(-14f, 14f) else listOf(0f)
+    for (skew in skews) {
+        for (i in 0 until spokeCount) {
+            val angle = 360f / spokeCount * i
+            val rad = angle * PI.toFloat() / 180f
+            CubeNode(
+                size = Size(diameter * 0.03f, spokeWidth, spokeLength),
+                materialInstance = metal,
+                position = Position(spokeX, center.y + midRadius * kotlin.math.sin(rad), center.z + midRadius * kotlin.math.cos(rad)),
+                // Pitching by -angle about the axle lays the spoke's length along the radius.
+                rotation = Rotation(x = -angle + skew),
+            )
+        }
+    }
+    // Hub and centre cap.
+    CylinderNode(
+        radius = hubRadius,
+        height = diameter * 0.05f,
+        materialInstance = metal,
+        position = Position(spokeX, center.y, center.z),
+        rotation = axleAlongX,
+    )
+    // Rim lip; the deep dish gets a much wider polished one.
+    val lip = if (part == GeneratedPart.WheelDeepDish) 0.07f * r else 0.035f * r
+    TorusNode(
+        majorRadius = rimRadius - lip,
+        minorRadius = lip,
+        materialInstance = if (part == GeneratedPart.WheelDeepDish) materials.silver else metal,
+        position = Position(face + outward * diameter * 0.01f, center.y, center.z),
+        rotation = axleAlongX,
+    )
+}
+
+private data class WheelStyle(
+    val rimRadius: Float,
+    val spokeCount: Int,
+    val spokeWidth: Float,
+    val metal: MaterialInstance,
+)
 
 /** The same decal image on both doors, rotated (not mirrored) so it reads correctly on each side. */
 @Composable

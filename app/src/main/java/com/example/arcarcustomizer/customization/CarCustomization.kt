@@ -67,10 +67,12 @@ data class PartSlot(
     val options: List<PartOption>,
     /** Garage camera height for this slot's close-up; null uses the default low angle. */
     val cameraElevationDeg: Float? = null,
-) {
-    /** Whether this slot's parts are loaded models placed at [positions]. */
-    val isModelSlot get() = options.all { it.visual is PartVisual.Model }
-}
+    /**
+     * True when [positions] are where parts physically sit (wheels, steering wheel), so they
+     * describe the car's footprint; false when they're only camera aims (spoilers, decals…).
+     */
+    val positionsAreGeometry: Boolean = true,
+)
 
 /**
  * One selectable car body, with everything about it that's specific to its own .glb: which
@@ -94,15 +96,17 @@ data class CarModel(
 )
 
 /**
- * The wheel-ish downloads sourced so far. None of them cleanly separate a tire from its rim, so
- * they're offered together as one "Wheels" slot rather than split into separate Tires/Rims
- * slots that would only have one real option each. Add a new [PartSlot] (e.g. "headlights") the
+ * Wheel options: the downloaded tire models plus three wheels generated in code (see
+ * [GeneratedPart]). None of the downloads cleanly separate a tire from its rim, so wheels are
+ * offered whole as one slot rather than split into separate Tires/Rims slots. Add a new [PartSlot] (e.g. "headlights") the
  * same way once a matching asset exists — nothing else about this system is wheel-specific.
  */
 private val WheelOptions = listOf(
-    PartOption("Hubcap", "models/wheels_hubcap.glb"),
     PartOption("Tire", "models/wheels_tire.glb", CarStats(0f, 0.03f, 0.06f)),
     PartOption("Vehicle Tire", "models/wheels_vehicle_tire.glb", CarStats(0.02f, 0f, 0.03f)),
+    PartOption("Blade 5-Spoke", GeneratedPart.WheelFiveSpoke, CarStats(0.01f, 0.02f, 0.03f)),
+    PartOption("Gold Mesh", GeneratedPart.WheelMesh, CarStats(0f, 0.01f, 0.05f)),
+    PartOption("Deep Dish", GeneratedPart.WheelDeepDish, CarStats(-0.01f, 0.03f, 0.04f)),
 )
 
 private val SteeringWheelOptions = listOf(
@@ -145,6 +149,7 @@ private fun generatedSlots(body: BodyAnchors, nativeToMeters: Float): Array<Part
             targetSizeNative = 1.3f * u,
             options = SpoilerOptions,
             cameraElevationDeg = 16f,
+            positionsAreGeometry = false,
         ),
         PartSlot(
             id = "bodyKit",
@@ -153,6 +158,7 @@ private fun generatedSlots(body: BodyAnchors, nativeToMeters: Float): Array<Part
             targetSizeNative = 1.8f * u,
             options = BodyKitOptions,
             cameraElevationDeg = 6f,
+            positionsAreGeometry = false,
         ),
         PartSlot(
             id = "decals",
@@ -161,6 +167,7 @@ private fun generatedSlots(body: BodyAnchors, nativeToMeters: Float): Array<Part
             targetSizeNative = 2.2f * u,
             options = DecalOptions,
             cameraElevationDeg = 30f,
+            positionsAreGeometry = false,
         ),
     )
 }
@@ -408,7 +415,7 @@ fun SceneScope.CustomizableCar(
                             }
                         }
                         is PartVisual.Generated ->
-                            GeneratedPartNodes(visual.part, car, partMaterials, paint)
+                            GeneratedPartNodes(visual.part, car, slot, partMaterials, paint)
                     }
                 }
             }
