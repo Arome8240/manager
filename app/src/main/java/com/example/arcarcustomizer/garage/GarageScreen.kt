@@ -61,8 +61,6 @@ import io.github.sceneview.SceneView
 import io.github.sceneview.SurfaceType
 import io.github.sceneview.createEnvironment
 import io.github.sceneview.math.Position
-import io.github.sceneview.math.Size as SceneSize
-import io.github.sceneview.node.ContactShadowContext
 import io.github.sceneview.rememberCameraNode
 import io.github.sceneview.rememberEngine
 import io.github.sceneview.rememberEnvironment
@@ -126,9 +124,9 @@ fun GarageScreen(
             onFrame = { frameTimeNanos -> camera.update(cameraNode, frameTimeNanos) },
         ) {
             val footprint = car.footprint
-            val turntableRadius = footprint.halfLength * 1.08f
+            val turntableRadius = footprint.halfLength * 0.95f
             val deck = remember(materialLoader) {
-                materialLoader.createColorInstance(Color(0xFF15181F), metallic = 0.6f, roughness = 0.28f)
+                materialLoader.createColorInstance(Color(0xFF15181F), metallic = 0f, roughness = 0.35f)
             }
             val ring = remember(materialLoader) {
                 materialLoader.createColorInstance(GarageColors.Accent, metallic = 0f, roughness = 0.4f)
@@ -147,11 +145,6 @@ fun GarageScreen(
                 height = 0.025f,
                 materialInstance = ring,
                 position = floorPosition - Position(y = 0.05f),
-            )
-            ContactShadow(
-                size = SceneSize(footprint.halfLength * 1.3f, footprint.halfLength * 2.1f, 0f),
-                context = ContactShadowContext.Floor,
-                position = floorPosition + Position(y = 0.002f),
             )
             CustomizableCar(
                 car = car,
@@ -308,7 +301,7 @@ private fun ScrambleText(text: String, style: TextStyle) {
         }
         shown = text
     }
-    Text(shown, style = style, maxLines = 1)
+    Text(shown, style = style, maxLines = 1, softWrap = false)
 }
 
 @Composable

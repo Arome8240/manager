@@ -3,6 +3,7 @@ package com.example.arcarcustomizer.customization
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import io.github.sceneview.SceneScope
 import io.github.sceneview.loaders.ModelLoader
 import io.github.sceneview.math.Position
@@ -187,13 +188,17 @@ val DefaultCarPaints = listOf(
 /**
  * Sets the body material's `baseColorFactor` to [color]. [bodyMaterialName] must match the
  * material name authored on the car .glb's body mesh (see [CarModel.bodyMaterialName]).
+ *
+ * glTF's `baseColorFactor` is linear, while [Color] swatches are sRGB — converting first keeps a
+ * swatch's red from rendering as a washed-out salmon on the car.
  */
 fun ModelInstance.applyPaint(bodyMaterialName: String, color: Color) {
+    val linear = color.convert(ColorSpaces.LinearSrgb)
     materialInstances
         .firstOrNull { it.name == bodyMaterialName }
         ?.setParameter(
             "baseColorFactor",
-            color.red, color.green, color.blue, color.alpha
+            linear.red, linear.green, linear.blue, linear.alpha
         )
 }
 

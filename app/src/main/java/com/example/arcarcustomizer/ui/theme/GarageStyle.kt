@@ -1,6 +1,5 @@
 package com.example.arcarcustomizer.ui.theme
 
-import android.graphics.Typeface
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
@@ -20,6 +19,9 @@ import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.ExperimentalTextApi
+import androidx.compose.ui.text.font.DeviceFontFamilyName
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -43,8 +45,18 @@ object GarageColors {
     val TextMuted = Color(0x99FFFFFF)
 }
 
-/** The system condensed face, used in bold italic caps — the racing-game look without shipping a font file. */
-private val Condensed = FontFamily(Typeface.create("sans-serif-condensed", Typeface.NORMAL))
+/**
+ * The system condensed face, used in bold italic caps — the racing-game look without shipping a
+ * font file. Declared per weight/style so Compose resolves (or synthesizes) the bold italic.
+ */
+@OptIn(ExperimentalTextApi::class)
+private val Condensed = FontFamily(
+    listOf(FontWeight.Normal, FontWeight.Bold, FontWeight.Black).flatMap { weight ->
+        listOf(FontStyle.Normal, FontStyle.Italic).map { style ->
+            Font(DeviceFontFamilyName("sans-serif-condensed"), weight, style)
+        }
+    }
+)
 
 fun garageText(
     size: TextUnit,

@@ -11,6 +11,7 @@ import kotlin.math.cos
 import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
  * Where the garage camera sits for one picker category. The camera orbits [target] at
@@ -22,6 +23,8 @@ data class CameraShot(
     val azimuth: Float,
     val elevation: Float,
     val frameRadius: Float,
+    /** Closest the camera may get to [target], e.g. to stay outside the bodywork. */
+    val minDistance: Float = 0f,
     /** Whether the camera drifts round the car on its own after the user stops touching it. */
     val autoOrbit: Boolean,
 )
@@ -41,23 +44,48 @@ fun cameraShotFor(car: CarModel, category: CustomizationCategory): CameraShot {
             target = Position(footprint.center.x, footprint.groundY + 0.45f, footprint.center.z),
             azimuth = 35f.deg(),
             elevation = 14f.deg(),
-            frameRadius = footprint.halfLength * 1.05f,
+            frameRadius = footprint.halfLength * 1.2f,
             autoOrbit = true,
         )
 
         is CustomizationCategory.Part -> {
             val slot = category.slot
             val target = slot.positions.first() * car.nativeToMeters
-            // Look along the line from the car's centre out to the part, so we view it from
-            // outside the bodywork, then swing 25° off-axis for a three-quarter angle.
-            val outward = atan2(target.x - footprint.center.x, target.z - footprint.center.z)
-            CameraShot(
-                target = target,
-                azimuth = outward + 25f.deg(),
-                elevation = 10f.deg(),
-                frameRadius = max(slot.targetSizeNative * car.nativeToMeters * 1.4f, 0.45f),
-                autoOrbit = false,
+            val dx = target.x - footprint.center.x
+            val dz = target.z - footprint.center.z
+            val radial = atan2(dx, dz)
+            val edge = footprint.edgeDistance(radial)
+            val fromCenter = sqrt(dx * dx + dz * dz)
+            // Face the bodywork's nearest side head-on — the normal of the footprint ellipse at
+            // the part, so a wheel is seen from the side rather than from the bumper — then
+            // swing 25° off-axis for a three-quarter angle.
+            val facing = atan2(
+                dx / (footprint.halfExtentX * footprint.halfExtentX),
+                dz / (footprint.halfExtentZ * footprint.halfExtentZ),
             )
+            // Parts well inside the bodywork (a steering wheel) get a high, wider shot looking
+            // down in through the glass instead of a close-up that would sit inside the body.
+            val isInterior = fromCenter < edge * 0.6f
+            val partRadius = max(slot.targetSizeNative * car.nativeToMeters * 1.4f, 0.45f)
+            if (isInterior) {
+                CameraShot(
+                    target = target,
+                    azimuth = radial,
+                    elevation = 40f.deg(),
+                    frameRadius = max(partRadius, 1f),
+                    minDistance = edge - fromCenter + 1.8f,
+                    autoOrbit = false,
+                )
+            } else {
+                CameraShot(
+                    target = target,
+                    azimuth = facing + 25f.deg(),
+                    elevation = 10f.deg(),
+                    frameRadius = partRadius,
+                    minDistance = footprint.edgeDistance(facing) - fromCenter + 0.6f,
+                    autoOrbit = false,
+                )
+            }
         }
     }
 }
@@ -82,6 +110,8 @@ class GarageCameraController {
     private var goalElevation = 0f
     private var goalRadius = 1f
     private var goalTarget = Position()
+    private var minDistance = 0f
+    private var goalMinDistance = 0f
     private var zoom = 1f
 
     private var lastFrameNanos = 0L
@@ -96,6 +126,7 @@ class GarageCameraController {
         goalElevation = newShot.elevation
         goalRadius = newShot.frameRadius
         goalTarget = newShot.target
+        goalMinDistance = newShot.minDistance
         zoom = 1f
         if (first) {
             // First shot: start further out and swung round, so the car is "revealed".
@@ -103,6 +134,7 @@ class GarageCameraController {
             elevation = goalElevation + 12f.deg()
             radius = goalRadius * 2.2f
             target = goalTarget
+            minDistance = goalMinDistance
         }
     }
 
@@ -138,20 +170,25 @@ class GarageCameraController {
         elevation += (goalElevation - elevation) * t
         radius += (goalRadius * zoom - radius) * t
         target += (goalTarget - target) * t
+        minDistance += (goalMinDistance - minDistance) * t
 
         // Distance at which a sphere of `radius` fills the narrower half-FOV. The projection's
         // [0][0] and [1][1] terms are 1/tan(halfFov) for each axis, so this adapts to
         // orientation and to whatever lens SceneView configured.
         val projection = camera.projectionTransform
         val inverseTanHalfFov = max(projection.x.x, projection.y.y).takeIf { it > 0f } ?: 2.4f
-        val distance = radius * inverseTanHalfFov
+        // In landscape the picker covers the lower part of a short screen, so pull back further
+        // and aim below the subject to lift it into the clear area above the picker.
+        val landscape = projection.x.x < projection.y.y
+        val distance = max(radius * inverseTanHalfFov * if (landscape) 1.35f else 1f, minDistance)
+        val aim = target - Position(y = radius * if (landscape) 0.4f else 0.1f)
 
         val eye = Position(
             x = target.x + distance * cos(elevation) * sin(azimuth),
             y = target.y + distance * sin(elevation),
             z = target.z + distance * cos(elevation) * cos(azimuth),
         )
-        camera.lookAt(eye, target, Position(y = 1f))
+        camera.lookAt(eye, aim, Position(y = 1f))
     }
 
     private fun wrapAngle(angle: Float): Float {
