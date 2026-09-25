@@ -21,6 +21,7 @@ import io.github.sceneview.math.Position
 import io.github.sceneview.math.Rotation
 import io.github.sceneview.math.Size
 import io.github.sceneview.math.colorOf
+import io.github.sceneview.texture.ImageTexture
 import kotlin.math.PI
 import kotlin.math.atan2
 import kotlin.math.hypot
@@ -126,6 +127,18 @@ class PartMaterials(private val materialLoader: MaterialLoader) {
         materialLoader.createColorInstance(Color(0xFF1C1C20), metallic = 0.6f, roughness = 0.25f)
 
     private val unlitCache = mutableMapOf<Color, MaterialInstance>()
+    private val decalCache = mutableMapOf<String, MaterialInstance>()
+
+    /**
+     * Transparent textured material for a code-drawn decal, created once per [key] and kept for
+     * the life of this screen's engine (which frees it). Deliberately not SceneView's ImageNode:
+     * removing one destroys its texture before its material, and Filament aborts the next frame
+     * ("Invalid texture still bound to MaterialInstance").
+     */
+    fun decal(key: String, draw: () -> Bitmap): MaterialInstance = decalCache.getOrPut(key) {
+        val texture = ImageTexture.Builder().bitmap(draw()).build(materialLoader.engine)
+        materialLoader.createTextureInstance(texture, isOpaque = false, metallic = 0f, roughness = 0.45f)
+    }
 
     /** Flat, full-brightness colour that ignores scene lighting — reads as a glowing lamp. */
     fun glow(color: Color): MaterialInstance =
@@ -188,10 +201,10 @@ fun SceneScope.GeneratedPartNodes(
         }
         GeneratedPart.RallyKit -> RallyKit(car, u, materials)
         GeneratedPart.RacingStripes -> RacingStripes(body, u, materials.contrastFor(paint))
-        GeneratedPart.RaceNumber -> DoorDecals(body, u, widthM = 0.5f, heightM = 0.5f, bitmap = remember { raceNumberBitmap("27") })
-        GeneratedPart.SideLivery -> DoorDecals(body, u, widthM = 1.5f, heightM = 0.375f, bitmap = remember { liveryBitmap() })
-        GeneratedPart.Flames -> DoorDecals(body, u, widthM = 1.6f, heightM = 0.45f, bitmap = remember { flamesBitmap() })
-        GeneratedPart.CheckerFade -> DoorDecals(body, u, widthM = 1.6f, heightM = 0.4f, bitmap = remember { checkerBitmap() })
+        GeneratedPart.RaceNumber -> DoorDecals(body, u, widthM = 0.5f, heightM = 0.5f, materials.decal("race27") { raceNumberBitmap("27") })
+        GeneratedPart.SideLivery -> DoorDecals(body, u, widthM = 1.5f, heightM = 0.375f, materials.decal("livery", ::liveryBitmap))
+        GeneratedPart.Flames -> DoorDecals(body, u, widthM = 1.6f, heightM = 0.45f, materials.decal("flames", ::flamesBitmap))
+        GeneratedPart.CheckerFade -> DoorDecals(body, u, widthM = 1.6f, heightM = 0.4f, materials.decal("checker", ::checkerBitmap))
         GeneratedPart.HeadXenon -> Headlights(car, u, materials, Color(0xFFF4F8FF))
         GeneratedPart.HeadIce -> Headlights(car, u, materials, Color(0xFF7FD8FF))
         GeneratedPart.HeadGold -> Headlights(car, u, materials, Color(0xFFFFC94A))
@@ -648,13 +661,13 @@ private data class WheelStyle(
 
 /** The same decal image on both doors, rotated (not mirrored) so it reads correctly on each side. */
 @Composable
-private fun SceneScope.DoorDecals(body: BodyAnchors, u: Float, widthM: Float, heightM: Float, bitmap: Bitmap) {
+private fun SceneScope.DoorDecals(body: BodyAnchors, u: Float, widthM: Float, heightM: Float, material: MaterialInstance) {
     // Shrink (keeping the aspect ratio) to fit between the wheel arches on shorter cars.
     val fit = minOf(1f, (body.skirtZ.endInclusive - body.skirtZ.start) * 1.25f / (widthM * u))
     for (side in listOf(-1f, 1f)) {
-        ImageNode(
-            bitmap = bitmap,
+        PlaneNode(
             size = Size(widthM * u * fit, heightM * u * fit, 0f),
+            materialInstance = material,
             position = Position(body.centerX + side * (body.doorSideHalfWidth + 0.012f * u), body.doorY, body.doorZ),
             rotation = Rotation(y = side * 90f),
         )
