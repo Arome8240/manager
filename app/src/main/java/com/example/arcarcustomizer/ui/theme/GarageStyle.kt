@@ -4,10 +4,15 @@ import android.graphics.Typeface
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Outline
@@ -88,4 +93,18 @@ fun Modifier.entrance(delayMillis: Int, fromX: Dp = 0.dp, fromY: Dp = 0.dp): Mod
         translationX = fromX.toPx() * remaining
         translationY = fromY.toPx() * remaining
     }
+}
+
+/** Slanted "‹ GARAGE" chip that returns from AR / Fallback mode to the garage. */
+@Composable
+fun GarageBackButton(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    Text(
+        text = "‹  GARAGE",
+        style = garageText(size = 14.sp),
+        modifier = modifier
+            .clip(SlantedShape(8.dp))
+            .background(GarageColors.Panel)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp, vertical = 8.dp),
+    )
 }

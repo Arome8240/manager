@@ -90,7 +90,7 @@ fun ArPlacementScreen(state: CustomizationState, onBack: () -> Unit) {
                 color = Color.White,
                 modifier = Modifier
                     .align(Alignment.TopCenter)
-                    .padding(24.dp)
+                    .padding(start = 24.dp, top = 72.dp, end = 24.dp)
                     .background(Color.Black.copy(alpha = 0.55f), RoundedCornerShape(12.dp))
                     .padding(12.dp),
             )
