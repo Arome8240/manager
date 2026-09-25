@@ -32,6 +32,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -134,19 +135,23 @@ fun GarageScreen(
             }
             val floorPosition = Position(footprint.center.x, footprint.groundY, footprint.center.z)
 
-            CylinderNode(
-                radius = turntableRadius,
-                height = 0.06f,
-                materialInstance = deck,
-                position = floorPosition - Position(y = 0.031f),
-            )
-            // Thin neon rim just proud of the deck edge.
-            CylinderNode(
-                radius = turntableRadius + 0.05f,
-                height = 0.025f,
-                materialInstance = ring,
-                position = floorPosition - Position(y = 0.05f),
-            )
+            // Keyed on the car: CylinderNode doesn't rebuild its geometry when radius changes,
+            // so each car gets a fresh turntable sized to it.
+            key(car.id) {
+                CylinderNode(
+                    radius = turntableRadius,
+                    height = 0.06f,
+                    materialInstance = deck,
+                    position = floorPosition - Position(y = 0.031f),
+                )
+                // Thin neon rim just proud of the deck edge.
+                CylinderNode(
+                    radius = turntableRadius + 0.05f,
+                    height = 0.025f,
+                    materialInstance = ring,
+                    position = floorPosition - Position(y = 0.05f),
+                )
+            }
             CustomizableCar(
                 car = car,
                 partModelLoader = modelLoader,

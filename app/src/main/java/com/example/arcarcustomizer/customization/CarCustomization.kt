@@ -2,6 +2,7 @@ package com.example.arcarcustomizer.customization
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.colorspace.ColorSpaces
 import io.github.sceneview.SceneScope
@@ -223,35 +224,40 @@ fun SceneScope.CustomizableCar(
     paint: CarPaint,
     selectedOptions: Map<String, PartOption>,
 ) {
-    Node(scale = Scale(car.nativeToMeters)) {
-        val carModel = rememberModelInstance(partModelLoader, car.assetPath)
-        carModel?.let { model ->
-            LaunchedEffect(model, paint, car) {
-                model.applyPaint(car.bodyMaterialName, paint.color)
+    // Keyed on the car so switching cars rebuilds every node: ModelNode only applies
+    // scaleToUnits when created, so reused part nodes would keep the previous car's sizing
+    // (e.g. GT-R wheels sized in metres ending up ~1 cm wide under the Aventador's 0.01 scale).
+    key(car.id) {
+        Node(scale = Scale(car.nativeToMeters)) {
+            val carModel = rememberModelInstance(partModelLoader, car.assetPath)
+            carModel?.let { model ->
+                LaunchedEffect(model, paint, car) {
+                    model.applyPaint(car.bodyMaterialName, paint.color)
+                }
+                ModelNode(
+                    modelInstance = model,
+                    apply = {
+                        // The car's own part meshes only mark where each slot's positions came
+                        // from — always hidden in favor of the selected PartOption instances below.
+                        renderableNodes
+                            .filter { it.name in car.hiddenNativeNodeNames }
+                            .forEach { it.isVisible = false }
+                    },
+                )
             }
-            ModelNode(
-                modelInstance = model,
-                apply = {
-                    // The car's own part meshes only mark where each slot's positions came
-                    // from — always hidden in favor of the selected PartOption instances below.
-                    renderableNodes
-                        .filter { it.name in car.hiddenNativeNodeNames }
-                        .forEach { it.isVisible = false }
-                },
-            )
-        }
 
-        car.slots.forEach { slot ->
-            val option = selectedOptions[slot.id] ?: slot.options.first()
-            slot.positions.forEach { position ->
-                val partInstance = rememberModelInstance(partModelLoader, option.assetPath)
-                partInstance?.let {
-                    ModelNode(
-                        modelInstance = it,
-                        position = position,
-                        centerOrigin = Position(x = 0f, y = 0f, z = 0f),
-                        scaleToUnits = slot.targetSizeNative,
-                    )
+            car.slots.forEach { slot ->
+                val option = selectedOptions[slot.id] ?: slot.options.first()
+                slot.positions.forEach { position ->
+                    val partInstance = rememberModelInstance(partModelLoader, option.assetPath)
+                    partInstance?.let {
+                        ModelNode(
+                            modelInstance = it,
+                            position = position,
+                            centerOrigin = Position(x = 0f, y = 0f, z = 0f),
+                            scaleToUnits = slot.targetSizeNative,
+                        )
+                    }
                 }
             }
         }
