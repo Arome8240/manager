@@ -4,6 +4,7 @@ import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.example.arcarcustomizer.data.SavedAppState
 import io.github.sceneview.math.Position
 import kotlin.math.cos
 import kotlin.math.max
@@ -70,6 +71,35 @@ class CustomizationState(val cars: List<CarModel>, val paints: List<CarPaint>) {
 
     fun selectOption(slotId: String, option: PartOption) {
         selectedOptions = selectedOptions + (slotId to option)
+    }
+
+    /** The persistable part of this build, by id/label (see [SavedAppState]). */
+    fun toSaved(showingLiveView: Boolean) = SavedAppState(
+        carId = car.id,
+        paintLabel = paint.label,
+        categoryId = categoryId,
+        partSelections = selectedOptions.mapValues { (_, option) -> option.label },
+        showingLiveView = showingLiveView,
+    )
+
+    /**
+     * Applies a build loaded from the database. Anything that no longer matches the catalog (a
+     * removed car, renamed option…) is skipped, leaving that piece at its default.
+     */
+    fun restore(saved: SavedAppState) {
+        cars.firstOrNull { it.id == saved.carId }?.let { car = it }
+        paints.firstOrNull { it.label == saved.paintLabel }?.let { paint = it }
+        // Selections are keyed by slot id and shared across cars, so look the option up in
+        // whichever car defines that slot.
+        val slotsById = cars.flatMap { it.slots }.groupBy { it.id }
+        selectedOptions = saved.partSelections.mapNotNull { (slotId, label) ->
+            slotsById[slotId]
+                ?.firstNotNullOfOrNull { slot -> slot.options.firstOrNull { it.label == label } }
+                ?.let { slotId to it }
+        }.toMap()
+        saved.categoryId
+            ?.takeIf { id -> car.categories.any { it.id == id } }
+            ?.let { categoryId = it }
     }
 }
 
